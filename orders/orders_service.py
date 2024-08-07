@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -27,21 +28,20 @@ class Customer(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     email = Column(String, unique=True, index=True)
+    orders = relationship("Order", back_populates="customer")
 
 
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
+    order_number = Column(
+        String, unique=True, index=True, default=lambda: str(uuid.uuid4())
+    )
     customer_id = Column(Integer, ForeignKey("customers.id"))
     customer = relationship("Customer", back_populates="orders")
     order_items = relationship(
         "OrderItem", back_populates="order", cascade="all, delete-orphan"
     )
-
-
-Customer.orders = relationship(
-    "Order", order_by=Order.id, back_populates="customer"
-)
 
 
 class OrderItem(Base):
@@ -108,6 +108,7 @@ class CustomerResponse(BaseModel):
 
 class OrderResponse(BaseModel):
     id: int
+    order_number: str
     customer: CustomerResponse
     order_items: List[OrderItemResponse]
 
@@ -131,6 +132,7 @@ def on_startup():
 def serialize_order(order: Order) -> OrderResponse:
     return OrderResponse(
         id=order.id,
+        order_number=order.order_number,
         customer=CustomerResponse(
             id=order.customer.id,
             name=order.customer.name,

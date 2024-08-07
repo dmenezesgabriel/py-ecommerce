@@ -1,8 +1,9 @@
 import os
+from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import Column, Float, Integer, String, create_engine
+from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -23,19 +24,17 @@ Base = declarative_base()
 class Delivery(Base):
     __tablename__ = "deliveries"
     id = Column(Integer, primary_key=True, index=True)
-    order_id = Column(Integer, index=True)
+    order_number = Column(
+        String, index=True
+    )  # Changed from order_id to order_number
     delivery_address = Column(String)
     delivery_date = Column(String)
     status = Column(String)
 
 
-Base.metadata.drop_all(bind=engine)
-Base.metadata.create_all(bind=engine)
-
-
 # Pydantic model for Delivery
 class DeliveryCreate(BaseModel):
-    order_id: int
+    order_number: str  # Changed from order_id to order_number
     delivery_address: str
     delivery_date: str
     status: str
@@ -50,10 +49,17 @@ def get_db():
         db.close()
 
 
+@app.on_event("startup")
+def on_startup():
+    # Drop all tables and recreate them
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+
 @app.post("/deliveries/")
 def create_delivery(delivery: DeliveryCreate, db: Session = Depends(get_db)):
     db_delivery = Delivery(
-        order_id=delivery.order_id,
+        order_number=delivery.order_number,
         delivery_address=delivery.delivery_address,
         delivery_date=delivery.delivery_date,
         status=delivery.status,
@@ -88,7 +94,7 @@ def update_delivery(
     db_delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
     if not db_delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
-    db_delivery.order_id = delivery.order_id
+    db_delivery.order_number = delivery.order_number
     db_delivery.delivery_address = delivery.delivery_address
     db_delivery.delivery_date = delivery.delivery_date
     db_delivery.status = delivery.status

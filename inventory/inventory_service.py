@@ -32,6 +32,7 @@ class Category(Base):
     __tablename__ = "categories"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
+    products = relationship("Product", back_populates="category")
 
 
 class Product(Base):
@@ -63,11 +64,6 @@ class Inventory(Base):
     product = relationship("Product", back_populates="inventory")
 
 
-Category.products = relationship(
-    "Product", order_by=Product.id, back_populates="category"
-)
-
-
 # Pydantic Models
 class ProductCreate(BaseModel):
     sku: str
@@ -93,6 +89,15 @@ class ProductResponse(BaseModel):
     quantity: int
 
 
+class CategoryCreate(BaseModel):
+    name: str
+
+
+class CategoryResponse(BaseModel):
+    id: int
+    name: str
+
+
 # Dependency
 def get_db():
     db = SessionLocal()
@@ -116,6 +121,13 @@ def serialize_product(product: Product) -> ProductResponse:
         category_name=product.category.name,
         price=product.price.amount,
         quantity=product.inventory.quantity,
+    )
+
+
+def serialize_category(category: Category) -> CategoryResponse:
+    return CategoryResponse(
+        id=category.id,
+        name=category.name,
     )
 
 
@@ -238,3 +250,46 @@ def delete_product(sku: str, db: Session = Depends(get_db)):
     db.commit()
 
     return serialize_product(db_product)
+
+
+@app.get(
+    "/products/by-category/{category_name}",
+    response_model=list[ProductResponse],
+)
+def get_products_by_category(
+    category_name: str, db: Session = Depends(get_db)
+):
+    category = (
+        db.query(Category).filter(Category.name == category_name).first()
+    )
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    products = (
+        db.query(Product).filter(Product.category_id == category.id).all()
+    )
+    return [serialize_product(product) for product in products]
+
+
+@app.post("/categories/", response_model=CategoryResponse)
+def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
+    db_category = (
+        db.query(Category).filter(Category.name == category.name).first()
+    )
+    if db_category:
+        raise HTTPException(
+            status_code=400, detail="Category with this name already exists"
+        )
+
+    db_category = Category(name=category.name)
+    db.add(db_category)
+    db.commit()
+    db.refresh(db_category)
+
+    return serialize_category(db_category)
+
+
+@app.get("/categories/", response_model=list[CategoryResponse])
+def list_categories(db: Session = Depends(get_db)):
+    categories = db.query(Category).all()
+    return [serialize_category(category) for category in categories]

@@ -1,1 +1,1 @@
-{"payments": {"1": {"id": 0, "order_id": 0, "amount": 1.0, "status": "string"}}}
+{"_default": {}, "payments": {"1": {"id": 0, "order_number": "string", "amount": 0.0, "status": "string"}}}
