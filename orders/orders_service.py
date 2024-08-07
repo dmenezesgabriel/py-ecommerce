@@ -316,3 +316,19 @@ async def delete_order(order_id: int, db: Session = Depends(get_db)):
     return serialize_order(
         db_order, 0.0
     )  # Total amount is 0 when order is deleted
+
+
+# Add customer routes
+@app.post("/customers/", response_model=CustomerResponse)
+def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
+    db_customer = Customer(name=customer.name, email=customer.email)
+    db.add(db_customer)
+    db.commit()
+    db.refresh(db_customer)
+    return db_customer
+
+
+@app.get("/customers/", response_model=List[CustomerResponse])
+def list_customers(db: Session = Depends(get_db)):
+    customers = db.query(Customer).all()
+    return customers
