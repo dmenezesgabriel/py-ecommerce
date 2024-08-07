@@ -1,0 +1,48 @@
+services:
+  inventory_service:
+    build:
+      context: ./inventory
+      dockerfile: Dockerfile.inventory
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./inventory:/app
+    networks:
+      - ecommerce_network
+
+  orders_service:
+    build:
+      context: ./orders
+      dockerfile: Dockerfile.orders
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./orders:/app
+    networks:
+      - ecommerce_network
+
+  payments_service:
+    build:
+      context: ./payments
+      dockerfile: Dockerfile.payments
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./payments:/app
+    networks:
+      - ecommerce_network
+
+  delivery_service:
+    build:
+      context: ./delivery
+      dockerfile: Dockerfile.delivery
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./delivery:/app
+    networks:
+      - ecommerce_network
+
+networks:
+  ecommerce_network:
+    driver: bridge
