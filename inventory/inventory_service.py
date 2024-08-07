@@ -313,6 +313,11 @@ def add_inventory(
         .filter(Inventory.product_id == db_product.id)
         .first()
     )
+    if not db_inventory:
+        raise HTTPException(
+            status_code=404, detail="Inventory record not found"
+        )
+
     db_inventory.quantity += inventory_update.quantity
     db.commit()
     db.refresh(db_inventory)
@@ -333,10 +338,16 @@ def subtract_inventory(
         .filter(Inventory.product_id == db_product.id)
         .first()
     )
+    if not db_inventory:
+        raise HTTPException(
+            status_code=404, detail="Inventory record not found"
+        )
+
     if db_inventory.quantity < inventory_update.quantity:
         raise HTTPException(
             status_code=400, detail="Not enough inventory to subtract"
         )
+
     db_inventory.quantity -= inventory_update.quantity
     db.commit()
     db.refresh(db_inventory)

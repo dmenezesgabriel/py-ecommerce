@@ -171,53 +171,74 @@ async def check_inventory(
 @app.post("/orders/", response_model=OrderResponse)
 async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
     async with aiohttp.ClientSession() as session:
-        # Check if the customer already exists
-        customer = (
-            db.query(Customer)
-            .filter(Customer.email == order.customer.email)
-            .first()
-        )
-        if not customer:
-            customer = Customer(
-                name=order.customer.name, email=order.customer.email
+        try:
+            # Check if the customer already exists
+            customer = (
+                db.query(Customer)
+                .filter(Customer.email == order.customer.email)
+                .first()
             )
-            db.add(customer)
+            if not customer:
+                customer = Customer(
+                    name=order.customer.name, email=order.customer.email
+                )
+                db.add(customer)
+                db.commit()
+                db.refresh(customer)
+
+            db_order = Order(customer_id=customer.id)
+            db.add(db_order)
             db.commit()
-            db.refresh(customer)
+            db.refresh(db_order)
 
-        db_order = Order(customer_id=customer.id)
-        db.add(db_order)
-        db.commit()
-        db.refresh(db_order)
+            total_amount = 0.0
+            for item in order.order_items:
+                # Check inventory before creating order
+                await check_inventory(item.product_sku, item.quantity, session)
 
-        total_amount = 0.0
+                # Subtract from inventory
+                async with session.post(
+                    f"http://inventory_service:8001/inventory/{item.product_sku}/subtract",
+                    json={"quantity": item.quantity},
+                ) as response:
+                    if response.status != 200:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Failed to update inventory",
+                        )
 
-        for item in order.order_items:
-            # Check inventory before creating order
-            await check_inventory(item.product_sku, item.quantity, session)
+                db_order_item = OrderItem(
+                    order_id=db_order.id,
+                    product_sku=item.product_sku,
+                    quantity=item.quantity,
+                )
+                db.add(db_order_item)
+                async with session.get(
+                    f"http://inventory_service:8001/products/{item.product_sku}"
+                ) as response:
+                    if response.status != 200:
+                        raise HTTPException(
+                            status_code=404,
+                            detail=f"Product {item.product_sku} not found",
+                        )
+                    product = await response.json()
+                    product_price = product["price"]
+                    total_amount += product_price * item.quantity
 
-            db_order_item = OrderItem(
-                order_id=db_order.id,
-                product_sku=item.product_sku,
-                quantity=item.quantity,
-            )
-            db.add(db_order_item)
-            # Fetch product price from inventory_service
-            async with session.get(
-                f"http://inventory_service:8001/products/{item.product_sku}"
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Product {item.product_sku} not found",
+            db.commit()
+            return serialize_order(db_order, total_amount)
+
+        except Exception as e:
+            # Rollback inventory if there's any error
+            db.rollback()
+            # Rollback inventory changes made before the failure
+            for item in order.order_items:
+                async with aiohttp.ClientSession() as session:
+                    await session.post(
+                        f"http://inventory_service:8001/inventory/{item.product_sku}/add",
+                        json={"quantity": item.quantity},
                     )
-                product = await response.json()
-                product_price = product["price"]
-                total_amount += product_price * item.quantity
-
-        db.commit()
-
-        return serialize_order(db_order, total_amount)
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/orders/", response_model=List[OrderResponse])
@@ -277,54 +298,129 @@ async def read_order(order_id: int, db: Session = Depends(get_db)):
 async def update_order(
     order_id: int, order: OrderCreate, db: Session = Depends(get_db)
 ):
-    db_order = db.query(Order).filter(Order.id == order_id).first()
-    if not db_order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
     async with aiohttp.ClientSession() as session:
-        # Update customer information
-        customer = (
-            db.query(Customer)
-            .filter(Customer.email == order.customer.email)
-            .first()
-        )
-        if not customer:
-            customer = Customer(
-                name=order.customer.name, email=order.customer.email
+        # Track inventory changes to revert if needed
+        inventory_changes = []
+
+        try:
+            db_order = db.query(Order).filter(Order.id == order_id).first()
+            if not db_order:
+                raise HTTPException(status_code=404, detail="Order not found")
+
+            # Update customer information
+            customer = (
+                db.query(Customer)
+                .filter(Customer.email == order.customer.email)
+                .first()
             )
-            db.add(customer)
+            if not customer:
+                customer = Customer(
+                    name=order.customer.name, email=order.customer.email
+                )
+                db.add(customer)
+                db.commit()
+                db.refresh(customer)
+            db_order.customer_id = customer.id
+
+            # Retrieve existing order items to compare with new ones
+            existing_order_items = (
+                db.query(OrderItem)
+                .filter(OrderItem.order_id == order_id)
+                .all()
+            )
+            existing_order_items_dict = {
+                item.product_sku: item.quantity
+                for item in existing_order_items
+            }
+
+            # Remove old order items
+            db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
+
+            total_amount = 0.0
+            for item in order.order_items:
+                # Check inventory before updating order
+                await check_inventory(item.product_sku, item.quantity, session)
+
+                if item.product_sku in existing_order_items_dict:
+                    old_quantity = existing_order_items_dict[item.product_sku]
+                    if item.quantity > old_quantity:
+                        # If new quantity is greater, subtract the difference
+                        diff = item.quantity - old_quantity
+                        async with session.post(
+                            f"http://inventory_service:8001/inventory/{item.product_sku}/subtract",
+                            json={"quantity": diff},
+                        ) as response:
+                            if response.status != 200:
+                                raise HTTPException(
+                                    status_code=400,
+                                    detail="Failed to update inventory",
+                                )
+                        inventory_changes.append((item.product_sku, diff))
+                    elif item.quantity < old_quantity:
+                        # If new quantity is less, add back the difference
+                        diff = old_quantity - item.quantity
+                        async with session.post(
+                            f"http://inventory_service:8001/inventory/{item.product_sku}/add",
+                            json={"quantity": diff},
+                        ) as response:
+                            if response.status != 200:
+                                raise HTTPException(
+                                    status_code=400,
+                                    detail="Failed to update inventory",
+                                )
+                        inventory_changes.append((item.product_sku, -diff))
+                else:
+                    # New item, subtract its quantity
+                    async with session.post(
+                        f"http://inventory_service:8001/inventory/{item.product_sku}/subtract",
+                        json={"quantity": item.quantity},
+                    ) as response:
+                        if response.status != 200:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Failed to update inventory",
+                            )
+                    inventory_changes.append((item.product_sku, item.quantity))
+
+                db_order_item = OrderItem(
+                    order_id=order_id,
+                    product_sku=item.product_sku,
+                    quantity=item.quantity,
+                )
+                db.add(db_order_item)
+
+                async with session.get(
+                    f"http://inventory_service:8001/products/{item.product_sku}"
+                ) as response:
+                    if response.status != 200:
+                        raise HTTPException(
+                            status_code=404,
+                            detail=f"Product {item.product_sku} not found",
+                        )
+                    product = await response.json()
+                    product_price = product["price"]
+                    total_amount += product_price * item.quantity
+
             db.commit()
-            db.refresh(customer)
-        db_order.customer_id = customer.id
+            return serialize_order(db_order, total_amount)
 
-        # Update order items
-        db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
-        total_amount = 0.0
-        for item in order.order_items:
-            # Check inventory before updating order
-            await check_inventory(item.product_sku, item.quantity, session)
-
-            db_order_item = OrderItem(
-                order_id=order_id,
-                product_sku=item.product_sku,
-                quantity=item.quantity,
-            )
-            db.add(db_order_item)
-            # Fetch product price from inventory_service
-            async with session.get(
-                f"http://inventory_service:8001/products/{item.product_sku}"
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Product {item.product_sku} not found",
-                    )
-                product = await response.json()
-                product_price = product["price"]
-                total_amount += product_price * item.quantity
-
-        db.commit()
-        return serialize_order(db_order, total_amount)
+        except Exception as e:
+            # Rollback inventory if there's any error
+            db.rollback()
+            # Revert inventory changes made during the operation
+            for sku, quantity in inventory_changes:
+                async with aiohttp.ClientSession() as session:
+                    if quantity > 0:
+                        await session.post(
+                            f"http://inventory_service:8001/inventory/{sku}/add",
+                            json={"quantity": quantity},
+                        )
+                    else:
+                        await session.post(
+                            f"http://inventory_service:8001/inventory/{sku}/subtract",
+                            json={"quantity": -quantity},
+                        )
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.delete("/orders/{order_id}", status_code=204)
