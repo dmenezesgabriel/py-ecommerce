@@ -2,6 +2,7 @@ import os
 import uuid
 from typing import List
 
+import aiohttp  # For making asynchronous HTTP requests
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import Column, ForeignKey, Integer, String, create_engine
@@ -111,6 +112,7 @@ class OrderResponse(BaseModel):
     order_number: str
     customer: CustomerResponse
     order_items: List[OrderItemResponse]
+    total_amount: float  # Add total_amount field
 
 
 # Dependency
@@ -129,7 +131,7 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
 
 
-def serialize_order(order: Order) -> OrderResponse:
+def serialize_order(order: Order, total_amount: float) -> OrderResponse:
     return OrderResponse(
         id=order.id,
         order_number=order.order_number,
@@ -144,95 +146,166 @@ def serialize_order(order: Order) -> OrderResponse:
             )
             for item in order.order_items
         ],
+        total_amount=total_amount,  # Include total_amount
     )
 
 
 @app.post("/orders/", response_model=OrderResponse)
-def create_order(order: OrderCreate, db: Session = Depends(get_db)):
-    # Check if the customer already exists
-    customer = (
-        db.query(Customer)
-        .filter(Customer.email == order.customer.email)
-        .first()
-    )
-    if not customer:
-        customer = Customer(
-            name=order.customer.name, email=order.customer.email
+async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
+    async with aiohttp.ClientSession() as session:
+        # Check if the customer already exists
+        customer = (
+            db.query(Customer)
+            .filter(Customer.email == order.customer.email)
+            .first()
         )
-        db.add(customer)
+        if not customer:
+            customer = Customer(
+                name=order.customer.name, email=order.customer.email
+            )
+            db.add(customer)
+            db.commit()
+            db.refresh(customer)
+
+        db_order = Order(customer_id=customer.id)
+        db.add(db_order)
         db.commit()
-        db.refresh(customer)
+        db.refresh(db_order)
 
-    db_order = Order(customer_id=customer.id)
-    db.add(db_order)
-    db.commit()
-    db.refresh(db_order)
+        total_amount = 0.0
 
-    for item in order.order_items:
-        db_order_item = OrderItem(
-            order_id=db_order.id,
-            product_sku=item.product_sku,
-            quantity=item.quantity,
-        )
-        db.add(db_order_item)
-    db.commit()
+        for item in order.order_items:
+            db_order_item = OrderItem(
+                order_id=db_order.id,
+                product_sku=item.product_sku,
+                quantity=item.quantity,
+            )
+            db.add(db_order_item)
+            # Fetch product price from inventory_service
+            async with session.get(
+                f"http://inventory_service:8001/products/{item.product_sku}"
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Product {item.product_sku} not found",
+                    )
+                product = await response.json()
+                product_price = product["price"]
+                total_amount += product_price * item.quantity
 
-    return serialize_order(db_order)
+        db.commit()
+
+        return serialize_order(db_order, total_amount)
 
 
 @app.get("/orders/", response_model=List[OrderResponse])
-def read_orders(db: Session = Depends(get_db)):
+async def read_orders(db: Session = Depends(get_db)):
     orders = db.query(Order).all()
-    return [serialize_order(order) for order in orders]
+    result = []
+    async with aiohttp.ClientSession() as session:
+        for order in orders:
+            order_items = (
+                db.query(OrderItem)
+                .filter(OrderItem.order_id == order.id)
+                .all()
+            )
+            total_amount = 0.0
+            for item in order_items:
+                async with session.get(
+                    f"http://inventory_service:8001/products/{item.product_sku}"
+                ) as response:
+                    if response.status != 200:
+                        raise HTTPException(
+                            status_code=404,
+                            detail=f"Product {item.product_sku} not found",
+                        )
+                    product = await response.json()
+                    product_price = product["price"]
+                    total_amount += product_price * item.quantity
+            result.append(serialize_order(order, total_amount))
+    return result
 
 
 @app.get("/orders/{order_id}", response_model=OrderResponse)
-def read_order(order_id: int, db: Session = Depends(get_db)):
+async def read_order(order_id: int, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    return serialize_order(order)
+    order_items = (
+        db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    )
+    total_amount = 0.0
+    async with aiohttp.ClientSession() as session:
+        for item in order_items:
+            async with session.get(
+                f"http://inventory_service:8001/products/{item.product_sku}"
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Product {item.product_sku} not found",
+                    )
+                product = await response.json()
+                product_price = product["price"]
+                total_amount += product_price * item.quantity
+    return serialize_order(order, total_amount)
 
 
 @app.put("/orders/{order_id}", response_model=OrderResponse)
-def update_order(
+async def update_order(
     order_id: int, order: OrderCreate, db: Session = Depends(get_db)
 ):
     db_order = db.query(Order).filter(Order.id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # Update customer information
-    customer = (
-        db.query(Customer)
-        .filter(Customer.email == order.customer.email)
-        .first()
-    )
-    if not customer:
-        customer = Customer(
-            name=order.customer.name, email=order.customer.email
+    async with aiohttp.ClientSession() as session:
+        # Update customer information
+        customer = (
+            db.query(Customer)
+            .filter(Customer.email == order.customer.email)
+            .first()
         )
-        db.add(customer)
+        if not customer:
+            customer = Customer(
+                name=order.customer.name, email=order.customer.email
+            )
+            db.add(customer)
+            db.commit()
+            db.refresh(customer)
+        db_order.customer_id = customer.id
+
+        # Update order items
+        db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
+        total_amount = 0.0
+        for item in order.order_items:
+            db_order_item = OrderItem(
+                order_id=order_id,
+                product_sku=item.product_sku,
+                quantity=item.quantity,
+            )
+            db.add(db_order_item)
+            # Fetch product price from inventory_service
+            async with session.get(
+                f"http://inventory_service:8001/products/{item.product_sku}"
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Product {item.product_sku} not found",
+                    )
+                product = await response.json()
+                product_price = product["price"]
+                total_amount += product_price * item.quantity
+
         db.commit()
-        db.refresh(customer)
-    db_order.customer_id = customer.id
 
-    # Update order items
-    db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
-    for item in order.order_items:
-        db_order_item = OrderItem(
-            order_id=order_id,
-            product_sku=item.product_sku,
-            quantity=item.quantity,
-        )
-        db.add(db_order_item)
-    db.commit()
-
-    return serialize_order(db_order)
+    return serialize_order(db_order, total_amount)
 
 
 @app.delete("/orders/{order_id}", response_model=OrderResponse)
-def delete_order(order_id: int, db: Session = Depends(get_db)):
+async def delete_order(order_id: int, db: Session = Depends(get_db)):
     db_order = db.query(Order).filter(Order.id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -240,4 +313,6 @@ def delete_order(order_id: int, db: Session = Depends(get_db)):
     db.delete(db_order)
     db.commit()
 
-    return serialize_order(db_order)
+    return serialize_order(
+        db_order, 0.0
+    )  # Total amount is 0 when order is deleted
