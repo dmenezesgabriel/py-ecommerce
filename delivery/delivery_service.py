@@ -1,22 +1,24 @@
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, Integer, String, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
 import os
+
+from fastapi import Depends, FastAPI, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import Column, Float, Integer, String, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Session, sessionmaker
 
 app = FastAPI()
 
 DATABASE_URL = "sqlite:///./data/deliveries.db"
 
 # Ensure the data directory exists
-if not os.path.exists('/app/data'):
-    os.makedirs('/app/data')
+if not os.path.exists("/app/data"):
+    os.makedirs("/app/data")
 
 # SQLAlchemy setup
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
 
 class Delivery(Base):
     __tablename__ = "deliveries"
@@ -26,7 +28,10 @@ class Delivery(Base):
     delivery_date = Column(String)
     status = Column(String)
 
+
+Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
+
 
 # Pydantic model for Delivery
 class DeliveryCreate(BaseModel):
@@ -34,6 +39,7 @@ class DeliveryCreate(BaseModel):
     delivery_address: str
     delivery_date: str
     status: str
+
 
 # Dependency
 def get_db():
@@ -43,23 +49,29 @@ def get_db():
     finally:
         db.close()
 
+
 @app.post("/deliveries/")
 def create_delivery(delivery: DeliveryCreate, db: Session = Depends(get_db)):
     db_delivery = Delivery(
         order_id=delivery.order_id,
         delivery_address=delivery.delivery_address,
         delivery_date=delivery.delivery_date,
-        status=delivery.status
+        status=delivery.status,
     )
     db.add(db_delivery)
     db.commit()
     db.refresh(db_delivery)
-    return {"message": "Delivery created successfully", "delivery": db_delivery}
+    return {
+        "message": "Delivery created successfully",
+        "delivery": db_delivery,
+    }
+
 
 @app.get("/deliveries/")
 def read_deliveries(db: Session = Depends(get_db)):
     deliveries = db.query(Delivery).all()
     return {"deliveries": deliveries}
+
 
 @app.get("/deliveries/{delivery_id}")
 def read_delivery(delivery_id: int, db: Session = Depends(get_db)):
@@ -68,8 +80,11 @@ def read_delivery(delivery_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Delivery not found")
     return {"delivery": delivery}
 
+
 @app.put("/deliveries/{delivery_id}")
-def update_delivery(delivery_id: int, delivery: DeliveryCreate, db: Session = Depends(get_db)):
+def update_delivery(
+    delivery_id: int, delivery: DeliveryCreate, db: Session = Depends(get_db)
+):
     db_delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
     if not db_delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
@@ -80,6 +95,7 @@ def update_delivery(delivery_id: int, delivery: DeliveryCreate, db: Session = De
     db.commit()
     db.refresh(db_delivery)
     return {"message": "Delivery updated successfully"}
+
 
 @app.delete("/deliveries/{delivery_id}")
 def delete_delivery(delivery_id: int, db: Session = Depends(get_db)):

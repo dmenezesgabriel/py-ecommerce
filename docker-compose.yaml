@@ -9,6 +9,7 @@ services:
       - ./inventory:/app
     networks:
       - ecommerce_network
+    command: uvicorn inventory_service:app --host 0.0.0.0 --port 8001 --reload
 
   orders_service:
     build:
@@ -20,6 +21,7 @@ services:
       - ./orders:/app
     networks:
       - ecommerce_network
+    command: uvicorn orders_service:app --host 0.0.0.0 --port 8002 --reload
 
   payments_service:
     build:
@@ -31,6 +33,7 @@ services:
       - ./payments:/app
     networks:
       - ecommerce_network
+    command: uvicorn payments_service:app --host 0.0.0.0 --port 8003 --reload
 
   delivery_service:
     build:
@@ -42,6 +45,7 @@ services:
       - ./delivery:/app
     networks:
       - ecommerce_network
+    command: uvicorn delivery_service:app --host 0.0.0.0 --port 8004 --reload
 
 networks:
   ecommerce_network:

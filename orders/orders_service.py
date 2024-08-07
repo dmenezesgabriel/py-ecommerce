@@ -1,41 +1,116 @@
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, Integer, String, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
 import os
+from typing import List
+
+from fastapi import Depends, FastAPI, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import Column, ForeignKey, Integer, String, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Session, relationship, sessionmaker
 
 app = FastAPI()
 
-DATABASE_URL = "sqlite:///./data/orders.db"
+DATABASE_URL = "sqlite:///./data/order.db"
 
 # Ensure the data directory exists
-if not os.path.exists('/app/data'):
-    os.makedirs('/app/data')
+if not os.path.exists("/app/data"):
+    os.makedirs("/app/data")
 
 # SQLAlchemy setup
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+
+# SQLAlchemy Models
+class Customer(Base):
+    __tablename__ = "customers"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    email = Column(String, unique=True, index=True)
+
+
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"))
+    customer = relationship("Customer", back_populates="orders")
+    order_items = relationship(
+        "OrderItem", back_populates="order", cascade="all, delete-orphan"
+    )
+
+
+Customer.orders = relationship(
+    "Order", order_by=Order.id, back_populates="customer"
+)
+
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"))
+    product_sku = Column(String, index=True)
     quantity = Column(Integer)
-    total_price = Column(Float)
-    customer_name = Column(String)
-    customer_address = Column(String)
+    order = relationship("Order", back_populates="order_items")
 
-Base.metadata.create_all(bind=engine)
 
-# Pydantic model for Order
-class OrderCreate(BaseModel):
-    product_id: int
+# Pydantic Models
+class OrderItemCreate(BaseModel):
+    product_sku: str
     quantity: int
-    total_price: float
-    customer_name: str
-    customer_address: str
+
+    class Config:
+        json_schema_extra = {
+            "examples": [{"product_sku": "ABC123", "quantity": 2}]
+        }
+
+
+class CustomerCreate(BaseModel):
+    name: str
+    email: str
+
+    class Config:
+        json_schema_extra = {
+            "examples": [{"name": "John Doe", "email": "john.doe@example.com"}]
+        }
+
+
+class OrderCreate(BaseModel):
+    customer: CustomerCreate
+    order_items: List[OrderItemCreate] = []
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "customer": {
+                        "name": "John Doe",
+                        "email": "john.doe@example.com",
+                    },
+                    "order_items": [
+                        {"product_sku": "ABC123", "quantity": 2},
+                        {"product_sku": "XYZ456", "quantity": 1},
+                    ],
+                }
+            ]
+        }
+
+
+class OrderItemResponse(BaseModel):
+    product_sku: str
+    quantity: int
+
+
+class CustomerResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+
+
+class OrderResponse(BaseModel):
+    id: int
+    customer: CustomerResponse
+    order_items: List[OrderItemResponse]
+
 
 # Dependency
 def get_db():
@@ -45,51 +120,122 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/orders/")
-def create_order(order: OrderCreate, db: Session = Depends(get_db)):
-    db_order = Order(
-        product_id=order.product_id,
-        quantity=order.quantity,
-        total_price=order.total_price,
-        customer_name=order.customer_name,
-        customer_address=order.customer_address
+
+@app.on_event("startup")
+def on_startup():
+    # Drop all tables and recreate them
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+
+def serialize_order(order: Order) -> OrderResponse:
+    return OrderResponse(
+        id=order.id,
+        customer=CustomerResponse(
+            id=order.customer.id,
+            name=order.customer.name,
+            email=order.customer.email,
+        ),
+        order_items=[
+            OrderItemResponse(
+                product_sku=item.product_sku, quantity=item.quantity
+            )
+            for item in order.order_items
+        ],
     )
+
+
+@app.post("/orders/", response_model=OrderResponse)
+def create_order(order: OrderCreate, db: Session = Depends(get_db)):
+    # Check if the customer already exists
+    customer = (
+        db.query(Customer)
+        .filter(Customer.email == order.customer.email)
+        .first()
+    )
+    if not customer:
+        customer = Customer(
+            name=order.customer.name, email=order.customer.email
+        )
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+
+    db_order = Order(customer_id=customer.id)
     db.add(db_order)
     db.commit()
     db.refresh(db_order)
-    return {"message": "Order created successfully", "order": db_order}
 
-@app.get("/orders/")
+    for item in order.order_items:
+        db_order_item = OrderItem(
+            order_id=db_order.id,
+            product_sku=item.product_sku,
+            quantity=item.quantity,
+        )
+        db.add(db_order_item)
+    db.commit()
+
+    return serialize_order(db_order)
+
+
+@app.get("/orders/", response_model=List[OrderResponse])
 def read_orders(db: Session = Depends(get_db)):
     orders = db.query(Order).all()
-    return {"orders": orders}
+    return [serialize_order(order) for order in orders]
 
-@app.get("/orders/{order_id}")
+
+@app.get("/orders/{order_id}", response_model=OrderResponse)
 def read_order(order_id: int, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    return {"order": order}
+    return serialize_order(order)
 
-@app.put("/orders/{order_id}")
-def update_order(order_id: int, order: OrderCreate, db: Session = Depends(get_db)):
+
+@app.put("/orders/{order_id}", response_model=OrderResponse)
+def update_order(
+    order_id: int, order: OrderCreate, db: Session = Depends(get_db)
+):
     db_order = db.query(Order).filter(Order.id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
-    db_order.product_id = order.product_id
-    db_order.quantity = order.quantity
-    db_order.total_price = order.total_price
-    db_order.customer_name = order.customer_name
-    db_order.customer_address = order.customer_address
-    db.commit()
-    db.refresh(db_order)
-    return {"message": "Order updated successfully"}
 
-@app.delete("/orders/{order_id}")
+    # Update customer information
+    customer = (
+        db.query(Customer)
+        .filter(Customer.email == order.customer.email)
+        .first()
+    )
+    if not customer:
+        customer = Customer(
+            name=order.customer.name, email=order.customer.email
+        )
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+    db_order.customer_id = customer.id
+
+    # Update order items
+    db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
+    for item in order.order_items:
+        db_order_item = OrderItem(
+            order_id=order_id,
+            product_sku=item.product_sku,
+            quantity=item.quantity,
+        )
+        db.add(db_order_item)
+    db.commit()
+
+    return serialize_order(db_order)
+
+
+@app.delete("/orders/{order_id}", response_model=OrderResponse)
 def delete_order(order_id: int, db: Session = Depends(get_db)):
     db_order = db.query(Order).filter(Order.id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
+
     db.delete(db_order)
     db.commit()
-    return {"message": "Order deleted successfully"}
+
+    return serialize_order(db_order)
