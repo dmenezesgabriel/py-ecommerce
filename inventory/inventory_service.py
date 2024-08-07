@@ -98,6 +98,10 @@ class CategoryResponse(BaseModel):
     name: str
 
 
+class InventoryUpdate(BaseModel):
+    quantity: int
+
+
 # Dependency
 def get_db():
     db = SessionLocal()
@@ -293,3 +297,48 @@ def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
 def list_categories(db: Session = Depends(get_db)):
     categories = db.query(Category).all()
     return [serialize_category(category) for category in categories]
+
+
+# Routes for adding and subtracting inventory
+@app.post("/inventory/{sku}/add", response_model=ProductResponse)
+def add_inventory(
+    sku: str, inventory_update: InventoryUpdate, db: Session = Depends(get_db)
+):
+    db_product = db.query(Product).filter(Product.sku == sku).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    db_inventory = (
+        db.query(Inventory)
+        .filter(Inventory.product_id == db_product.id)
+        .first()
+    )
+    db_inventory.quantity += inventory_update.quantity
+    db.commit()
+    db.refresh(db_inventory)
+
+    return serialize_product(db_product)
+
+
+@app.post("/inventory/{sku}/subtract", response_model=ProductResponse)
+def subtract_inventory(
+    sku: str, inventory_update: InventoryUpdate, db: Session = Depends(get_db)
+):
+    db_product = db.query(Product).filter(Product.sku == sku).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    db_inventory = (
+        db.query(Inventory)
+        .filter(Inventory.product_id == db_product.id)
+        .first()
+    )
+    if db_inventory.quantity < inventory_update.quantity:
+        raise HTTPException(
+            status_code=400, detail="Not enough inventory to subtract"
+        )
+    db_inventory.quantity -= inventory_update.quantity
+    db.commit()
+    db.refresh(db_inventory)
+
+    return serialize_product(db_product)
