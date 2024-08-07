@@ -150,6 +150,24 @@ def serialize_order(order: Order, total_amount: float) -> OrderResponse:
     )
 
 
+async def check_inventory(
+    sku: str, quantity: int, session: aiohttp.ClientSession
+):
+    async with session.get(
+        f"http://inventory_service:8001/products/{sku}"
+    ) as response:
+        if response.status != 200:
+            raise HTTPException(
+                status_code=404, detail=f"Product {sku} not found"
+            )
+        product = await response.json()
+        if product["quantity"] < quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not enough inventory for product {sku}",
+            )
+
+
 @app.post("/orders/", response_model=OrderResponse)
 async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
     async with aiohttp.ClientSession() as session:
@@ -175,6 +193,9 @@ async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
         total_amount = 0.0
 
         for item in order.order_items:
+            # Check inventory before creating order
+            await check_inventory(item.product_sku, item.quantity, session)
+
             db_order_item = OrderItem(
                 order_id=db_order.id,
                 product_sku=item.product_sku,
@@ -280,6 +301,9 @@ async def update_order(
         db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
         total_amount = 0.0
         for item in order.order_items:
+            # Check inventory before updating order
+            await check_inventory(item.product_sku, item.quantity, session)
+
             db_order_item = OrderItem(
                 order_id=order_id,
                 product_sku=item.product_sku,
@@ -300,25 +324,32 @@ async def update_order(
                 total_amount += product_price * item.quantity
 
         db.commit()
+        return serialize_order(db_order, total_amount)
 
-    return serialize_order(db_order, total_amount)
 
-
-@app.delete("/orders/{order_id}", response_model=OrderResponse)
-async def delete_order(order_id: int, db: Session = Depends(get_db)):
-    db_order = db.query(Order).filter(Order.id == order_id).first()
-    if not db_order:
+@app.delete("/orders/{order_id}", status_code=204)
+def delete_order(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-
-    db.delete(db_order)
+    db.delete(order)
     db.commit()
 
-    return serialize_order(
-        db_order, 0.0
-    )  # Total amount is 0 when order is deleted
+
+@app.get("/customers/", response_model=List[CustomerResponse])
+def read_customers(db: Session = Depends(get_db)):
+    customers = db.query(Customer).all()
+    return customers
 
 
-# Add customer routes
+@app.get("/customers/{customer_id}", response_model=CustomerResponse)
+def read_customer(customer_id: int, db: Session = Depends(get_db)):
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return customer
+
+
 @app.post("/customers/", response_model=CustomerResponse)
 def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
     db_customer = Customer(name=customer.name, email=customer.email)
@@ -328,7 +359,24 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
     return db_customer
 
 
-@app.get("/customers/", response_model=List[CustomerResponse])
-def list_customers(db: Session = Depends(get_db)):
-    customers = db.query(Customer).all()
-    return customers
+@app.put("/customers/{customer_id}", response_model=CustomerResponse)
+def update_customer(
+    customer_id: int, customer: CustomerCreate, db: Session = Depends(get_db)
+):
+    db_customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not db_customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    db_customer.name = customer.name
+    db_customer.email = customer.email
+    db.commit()
+    db.refresh(db_customer)
+    return db_customer
+
+
+@app.delete("/customers/{customer_id}", status_code=204)
+def delete_customer(customer_id: int, db: Session = Depends(get_db)):
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    db.delete(customer)
+    db.commit()
