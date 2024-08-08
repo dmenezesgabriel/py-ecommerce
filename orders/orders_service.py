@@ -1,11 +1,12 @@
 import os
 import uuid
+from enum import Enum as PyEnum
 from typing import List
 
 import aiohttp  # For making asynchronous HTTP requests
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import Column, ForeignKey, Integer, String, create_engine
+from sqlalchemy import Column, Enum, ForeignKey, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
 
@@ -16,6 +17,16 @@ DATABASE_URL = "sqlite:///./data/order.db"
 # Ensure the data directory exists
 if not os.path.exists("/app/data"):
     os.makedirs("/app/data")
+
+
+# Enum for Order Status
+class OrderStatus(PyEnum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+    CANCELED = "canceled"
+
 
 # SQLAlchemy setup
 engine = create_engine(DATABASE_URL)
@@ -39,6 +50,7 @@ class Order(Base):
         String, unique=True, index=True, default=lambda: str(uuid.uuid4())
     )
     customer_id = Column(Integer, ForeignKey("customers.id"))
+    status = Column(Enum(OrderStatus), default=OrderStatus.PENDING)
     customer = relationship("Customer", back_populates="orders")
     order_items = relationship(
         "OrderItem", back_populates="order", cascade="all, delete-orphan"
@@ -113,6 +125,11 @@ class OrderResponse(BaseModel):
     customer: CustomerResponse
     order_items: List[OrderItemResponse]
     total_amount: float  # Add total_amount field
+    status: OrderStatus  # Add status field
+
+
+class OrderStatusUpdate(BaseModel):
+    status: OrderStatus
 
 
 # Dependency
@@ -147,6 +164,7 @@ def serialize_order(order: Order, total_amount: float) -> OrderResponse:
             for item in order.order_items
         ],
         total_amount=total_amount,  # Include total_amount
+        status=order.status,  # Include status
     )
 
 
@@ -476,3 +494,38 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Customer not found")
     db.delete(customer)
     db.commit()
+
+
+@app.put("/orders/{order_id}/status", response_model=OrderResponse)
+async def update_order_status(
+    order_id: int,
+    status_update: OrderStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order.status = status_update.status
+    db.commit()
+    db.refresh(order)
+
+    order_items = (
+        db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+    )
+    total_amount = 0.0
+    async with aiohttp.ClientSession() as session:
+        for item in order_items:
+            async with session.get(
+                f"http://inventory_service:8001/products/{item.product_sku}"
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Product {item.product_sku} not found",
+                    )
+                product = await response.json()
+                product_price = product["price"]
+                total_amount += product_price * item.quantity
+
+    return serialize_order(order, total_amount)
