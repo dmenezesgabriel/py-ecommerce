@@ -31,6 +31,13 @@ class DeliveryStatus(str, Enum):
     CANCELED = "canceled"
 
 
+class Customer(Base):
+    __tablename__ = "customers"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
+    email = Column(String, unique=True, index=True)
+
+
 class Address(Base):
     __tablename__ = "addresses"
     id = Column(Integer, primary_key=True, index=True)
@@ -49,7 +56,9 @@ class Delivery(Base):
     delivery_address = Column(String)
     delivery_date = Column(String)
     status = Column(SQLAEnum(DeliveryStatus), default=DeliveryStatus.PENDING)
+    customer_id = Column(Integer, ForeignKey("customers.id"))
     address = relationship("Address", uselist=False, back_populates="delivery")
+    customer = relationship("Customer")
 
 
 # Pydantic models for Delivery
@@ -60,12 +69,18 @@ class AddressCreate(BaseModel):
     zip_code: str
 
 
+class CustomerCreate(BaseModel):
+    name: str
+    email: str
+
+
 class DeliveryCreate(BaseModel):
     order_id: int
     delivery_address: str
     delivery_date: str
     status: DeliveryStatus
     address: AddressCreate
+    customer: CustomerCreate
 
 
 class DeliveryStatusUpdate(BaseModel):
@@ -82,6 +97,15 @@ class AddressResponse(BaseModel):
         orm_mode = True
 
 
+class CustomerResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+
+    class Config:
+        orm_mode = True
+
+
 class DeliveryResponse(BaseModel):
     id: int
     order_id: int
@@ -89,6 +113,7 @@ class DeliveryResponse(BaseModel):
     delivery_date: str
     status: DeliveryStatus
     address: AddressResponse
+    customer: CustomerResponse
 
     class Config:
         orm_mode = True
@@ -112,15 +137,31 @@ def on_startup():
 
 @app.post("/deliveries/", response_model=DeliveryResponse)
 def create_delivery(delivery: DeliveryCreate, db: Session = Depends(get_db)):
+    # Check if the customer exists
+    db_customer = (
+        db.query(Customer)
+        .filter(Customer.email == delivery.customer.email)
+        .first()
+    )
+    if not db_customer:
+        db_customer = Customer(
+            name=delivery.customer.name, email=delivery.customer.email
+        )
+        db.add(db_customer)
+        db.commit()
+        db.refresh(db_customer)
+
     db_delivery = Delivery(
         order_id=delivery.order_id,
         delivery_address=delivery.delivery_address,
         delivery_date=delivery.delivery_date,
         status=delivery.status,
+        customer_id=db_customer.id,
     )
     db.add(db_delivery)
     db.commit()
     db.refresh(db_delivery)
+
     db_address = Address(
         delivery_id=db_delivery.id,
         city=delivery.address.city,
@@ -131,7 +172,9 @@ def create_delivery(delivery: DeliveryCreate, db: Session = Depends(get_db)):
     db.add(db_address)
     db.commit()
     db.refresh(db_address)
+
     db_delivery.address = db_address
+    db_delivery.customer = db_customer
     return db_delivery
 
 
@@ -164,6 +207,22 @@ def update_delivery(
     db_delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
     if not db_delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
+
+    # Update customer information
+    db_customer = (
+        db.query(Customer)
+        .filter(Customer.email == delivery.customer.email)
+        .first()
+    )
+    if not db_customer:
+        db_customer = Customer(
+            name=delivery.customer.name, email=delivery.customer.email
+        )
+        db.add(db_customer)
+        db.commit()
+        db.refresh(db_customer)
+    db_delivery.customer_id = db_customer.id
+
     db_delivery.order_id = delivery.order_id
     db_delivery.delivery_address = delivery.delivery_address
     db_delivery.delivery_date = delivery.delivery_date
@@ -182,6 +241,7 @@ def update_delivery(
     db.refresh(db_address)
 
     db_delivery.address = db_address
+    db_delivery.customer = db_customer
     return db_delivery
 
 
