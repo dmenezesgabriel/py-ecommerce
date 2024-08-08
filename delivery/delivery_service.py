@@ -3,9 +3,9 @@ from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import Column, Integer, String, create_engine
+from sqlalchemy import Column, ForeignKey, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, relationship, sessionmaker
 
 app = FastAPI()
 
@@ -21,6 +21,17 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+class Address(Base):
+    __tablename__ = "addresses"
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=False)
+    city = Column(String)
+    state = Column(String)
+    country = Column(String)
+    zip_code = Column(String)
+    delivery = relationship("Delivery", back_populates="address")
+
+
 class Delivery(Base):
     __tablename__ = "deliveries"
     id = Column(Integer, primary_key=True, index=True)
@@ -28,26 +39,37 @@ class Delivery(Base):
     delivery_address = Column(String)
     delivery_date = Column(String)
     status = Column(String)
-    city = Column(String)
-    state = Column(String)
-    country = Column(String)
-    zip_code = Column(String)
+    address = relationship("Address", uselist=False, back_populates="delivery")
 
 
 # Pydantic models for Delivery
-class DeliveryCreate(BaseModel):
-    order_id: int
-    delivery_address: str
-    delivery_date: str
-    status: str
+class AddressCreate(BaseModel):
     city: str
     state: str
     country: str
     zip_code: str
 
 
+class DeliveryCreate(BaseModel):
+    order_id: int
+    delivery_address: str
+    delivery_date: str
+    status: str
+    address: AddressCreate
+
+
 class DeliveryStatusUpdate(BaseModel):
     status: str
+
+
+class AddressResponse(BaseModel):
+    city: str
+    state: str
+    country: str
+    zip_code: str
+
+    class Config:
+        orm_mode = True
 
 
 class DeliveryResponse(BaseModel):
@@ -56,10 +78,7 @@ class DeliveryResponse(BaseModel):
     delivery_address: str
     delivery_date: str
     status: str
-    city: str
-    state: str
-    country: str
-    zip_code: str
+    address: AddressResponse
 
     class Config:
         orm_mode = True
@@ -88,14 +107,21 @@ def create_delivery(delivery: DeliveryCreate, db: Session = Depends(get_db)):
         delivery_address=delivery.delivery_address,
         delivery_date=delivery.delivery_date,
         status=delivery.status,
-        city=delivery.city,
-        state=delivery.state,
-        country=delivery.country,
-        zip_code=delivery.zip_code,
     )
     db.add(db_delivery)
     db.commit()
     db.refresh(db_delivery)
+    db_address = Address(
+        delivery_id=db_delivery.id,
+        city=delivery.address.city,
+        state=delivery.address.state,
+        country=delivery.address.country,
+        zip_code=delivery.address.zip_code,
+    )
+    db.add(db_address)
+    db.commit()
+    db.refresh(db_address)
+    db_delivery.address = db_address
     return db_delivery
 
 
@@ -132,12 +158,20 @@ def update_delivery(
     db_delivery.delivery_address = delivery.delivery_address
     db_delivery.delivery_date = delivery.delivery_date
     db_delivery.status = delivery.status
-    db_delivery.city = delivery.city
-    db_delivery.state = delivery.state
-    db_delivery.country = delivery.country
-    db_delivery.zip_code = delivery.zip_code
     db.commit()
     db.refresh(db_delivery)
+
+    db_address = (
+        db.query(Address).filter(Address.delivery_id == delivery_id).first()
+    )
+    db_address.city = delivery.address.city
+    db_address.state = delivery.address.state
+    db_address.country = delivery.address.country
+    db_address.zip_code = delivery.address.zip_code
+    db.commit()
+    db.refresh(db_address)
+
+    db_delivery.address = db_address
     return db_delivery
 
 
