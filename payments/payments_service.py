@@ -21,8 +21,12 @@ payments_table = db.table("payments")
 
 class Payment(BaseModel):
     id: int
-    order_number: str
+    order_id: int
     amount: float
+    status: str
+
+
+class PaymentStatusUpdate(BaseModel):
     status: str
 
 
@@ -32,7 +36,7 @@ def on_startup():
     db.truncate()  # Clear all data from all tables/collections
 
     # Optionally, you can prepopulate with default data here
-    # Example: payments_table.insert({"id": 1, "order_number": "ORD001", "amount": 100.0, "status": "Pending"})
+    # Example: payments_table.insert({"id": 1, "order_id": 1, "amount": 100.0, "status": "Pending"})
 
 
 @app.post("/payments/", response_model=Payment)
@@ -54,7 +58,7 @@ def read_payments():
     return [
         Payment(
             id=payment.get("id"),
-            order_number=payment.get("order_number"),
+            order_id=payment.get("order_id"),
             amount=payment.get("amount"),
             status=payment.get("status"),
         )
@@ -69,7 +73,20 @@ def read_payment(payment_id: int):
         raise HTTPException(status_code=404, detail="Payment not found")
     return Payment(
         id=payment.get("id"),
-        order_number=payment.get("order_number"),
+        order_id=payment.get("order_id"),
+        amount=payment.get("amount"),
+        status=payment.get("status"),
+    )
+
+
+@app.get("/payments/by-order-id/{order_id}", response_model=Payment)
+def read_payment_by_order_id(order_id: int):
+    payment = payments_table.get(Query().order_id == order_id)
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return Payment(
+        id=payment.get("id"),
+        order_id=payment.get("order_id"),
         amount=payment.get("amount"),
         status=payment.get("status"),
     )
@@ -83,6 +100,24 @@ def update_payment(payment_id: int, payment: Payment):
 
     payments_table.update(payment.dict(), Query().id == payment_id)
     return payment
+
+
+@app.put("/payments/{payment_id}/status", response_model=Payment)
+def update_payment_status(payment_id: int, status_update: PaymentStatusUpdate):
+    existing_payment = payments_table.get(Query().id == payment_id)
+    if existing_payment is None:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    payments_table.update(
+        {"status": status_update.status}, Query().id == payment_id
+    )
+    updated_payment = payments_table.get(Query().id == payment_id)
+    return Payment(
+        id=updated_payment.get("id"),
+        order_id=updated_payment.get("order_id"),
+        amount=updated_payment.get("amount"),
+        status=updated_payment.get("status"),
+    )
 
 
 @app.delete("/payments/{payment_id}")
