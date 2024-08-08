@@ -529,3 +529,34 @@ async def update_order_status(
                 total_amount += product_price * item.quantity
 
     return serialize_order(order, total_amount)
+
+
+@app.get(
+    "/orders/by-order-number/{order_number}", response_model=OrderResponse
+)
+async def read_order_by_order_number(
+    order_number: str, db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.order_number == order_number).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order_items = (
+        db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+    )
+    total_amount = 0.0
+    async with aiohttp.ClientSession() as session:
+        for item in order_items:
+            async with session.get(
+                f"http://inventory_service:8001/products/{item.product_sku}"
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Product {item.product_sku} not found",
+                    )
+                product = await response.json()
+                product_price = product["price"]
+                total_amount += product_price * item.quantity
+
+    return serialize_order(order, total_amount)
