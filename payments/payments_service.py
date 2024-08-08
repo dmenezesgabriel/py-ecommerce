@@ -1,4 +1,5 @@
 import os
+from enum import Enum
 from typing import List
 
 import tinydb
@@ -19,15 +20,22 @@ db = tinydb.TinyDB(db_file)
 payments_table = db.table("payments")
 
 
+class PaymentStatus(str, Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+
+
 class Payment(BaseModel):
     id: int
     order_id: int
     amount: float
-    status: str
+    status: PaymentStatus
 
 
 class PaymentStatusUpdate(BaseModel):
-    status: str
+    status: PaymentStatus
 
 
 @app.on_event("startup")
@@ -36,7 +44,7 @@ def on_startup():
     db.truncate()  # Clear all data from all tables/collections
 
     # Optionally, you can prepopulate with default data here
-    # Example: payments_table.insert({"id": 1, "order_id": 1, "amount": 100.0, "status": "Pending"})
+    # Example: payments_table.insert({"id": 1, "order_id": 1, "amount": 100.0, "status": "pending"})
 
 
 @app.post("/payments/", response_model=Payment)
@@ -60,7 +68,7 @@ def read_payments():
             id=payment.get("id"),
             order_id=payment.get("order_id"),
             amount=payment.get("amount"),
-            status=payment.get("status"),
+            status=PaymentStatus(payment.get("status")),
         )
         for payment in payments
     ]
@@ -75,7 +83,7 @@ def read_payment(payment_id: int):
         id=payment.get("id"),
         order_id=payment.get("order_id"),
         amount=payment.get("amount"),
-        status=payment.get("status"),
+        status=PaymentStatus(payment.get("status")),
     )
 
 
@@ -88,7 +96,7 @@ def read_payment_by_order_id(order_id: int):
         id=payment.get("id"),
         order_id=payment.get("order_id"),
         amount=payment.get("amount"),
-        status=payment.get("status"),
+        status=PaymentStatus(payment.get("status")),
     )
 
 
@@ -109,14 +117,14 @@ def update_payment_status(payment_id: int, status_update: PaymentStatusUpdate):
         raise HTTPException(status_code=404, detail="Payment not found")
 
     payments_table.update(
-        {"status": status_update.status}, Query().id == payment_id
+        {"status": status_update.status.value}, Query().id == payment_id
     )
     updated_payment = payments_table.get(Query().id == payment_id)
     return Payment(
         id=updated_payment.get("id"),
         order_id=updated_payment.get("order_id"),
         amount=updated_payment.get("amount"),
-        status=updated_payment.get("status"),
+        status=PaymentStatus(updated_payment.get("status")),
     )
 
 

@@ -1,9 +1,12 @@
 import os
+from enum import Enum
 from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import Column, ForeignKey, Integer, String, create_engine
+from sqlalchemy import Column
+from sqlalchemy import Enum as SQLAEnum
+from sqlalchemy import ForeignKey, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
 
@@ -19,6 +22,13 @@ if not os.path.exists("./data"):
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+
+class DeliveryStatus(str, Enum):
+    PENDING = "pending"
+    IN_TRANSIT = "in_transit"
+    DELIVERED = "delivered"
+    CANCELED = "canceled"
 
 
 class Address(Base):
@@ -38,7 +48,7 @@ class Delivery(Base):
     order_id = Column(Integer, index=True)
     delivery_address = Column(String)
     delivery_date = Column(String)
-    status = Column(String)
+    status = Column(SQLAEnum(DeliveryStatus), default=DeliveryStatus.PENDING)
     address = relationship("Address", uselist=False, back_populates="delivery")
 
 
@@ -54,12 +64,12 @@ class DeliveryCreate(BaseModel):
     order_id: int
     delivery_address: str
     delivery_date: str
-    status: str
+    status: DeliveryStatus
     address: AddressCreate
 
 
 class DeliveryStatusUpdate(BaseModel):
-    status: str
+    status: DeliveryStatus
 
 
 class AddressResponse(BaseModel):
@@ -77,7 +87,7 @@ class DeliveryResponse(BaseModel):
     order_id: int
     delivery_address: str
     delivery_date: str
-    status: str
+    status: DeliveryStatus
     address: AddressResponse
 
     class Config:
