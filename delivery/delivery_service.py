@@ -12,8 +12,8 @@ app = FastAPI()
 DATABASE_URL = "sqlite:///./data/deliveries.db"
 
 # Ensure the data directory exists
-if not os.path.exists("/app/data"):
-    os.makedirs("/app/data")
+if not os.path.exists("./data"):
+    os.makedirs("./data")
 
 # SQLAlchemy setup
 engine = create_engine(DATABASE_URL)
@@ -24,20 +24,45 @@ Base = declarative_base()
 class Delivery(Base):
     __tablename__ = "deliveries"
     id = Column(Integer, primary_key=True, index=True)
-    order_number = Column(
-        String, index=True
-    )  # Changed from order_id to order_number
+    order_id = Column(Integer, index=True)
     delivery_address = Column(String)
     delivery_date = Column(String)
     status = Column(String)
+    city = Column(String)
+    state = Column(String)
+    country = Column(String)
+    zip_code = Column(String)
 
 
-# Pydantic model for Delivery
+# Pydantic models for Delivery
 class DeliveryCreate(BaseModel):
-    order_number: str  # Changed from order_id to order_number
+    order_id: int
     delivery_address: str
     delivery_date: str
     status: str
+    city: str
+    state: str
+    country: str
+    zip_code: str
+
+
+class DeliveryStatusUpdate(BaseModel):
+    status: str
+
+
+class DeliveryResponse(BaseModel):
+    id: int
+    order_id: int
+    delivery_address: str
+    delivery_date: str
+    status: str
+    city: str
+    state: str
+    country: str
+    zip_code: str
+
+    class Config:
+        orm_mode = True
 
 
 # Dependency
@@ -56,51 +81,80 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
 
 
-@app.post("/deliveries/")
+@app.post("/deliveries/", response_model=DeliveryResponse)
 def create_delivery(delivery: DeliveryCreate, db: Session = Depends(get_db)):
     db_delivery = Delivery(
-        order_number=delivery.order_number,
+        order_id=delivery.order_id,
         delivery_address=delivery.delivery_address,
         delivery_date=delivery.delivery_date,
         status=delivery.status,
+        city=delivery.city,
+        state=delivery.state,
+        country=delivery.country,
+        zip_code=delivery.zip_code,
     )
     db.add(db_delivery)
     db.commit()
     db.refresh(db_delivery)
-    return {
-        "message": "Delivery created successfully",
-        "delivery": db_delivery,
-    }
+    return db_delivery
 
 
-@app.get("/deliveries/")
+@app.get("/deliveries/", response_model=List[DeliveryResponse])
 def read_deliveries(db: Session = Depends(get_db)):
     deliveries = db.query(Delivery).all()
-    return {"deliveries": deliveries}
+    return deliveries
 
 
-@app.get("/deliveries/{delivery_id}")
+@app.get("/deliveries/{delivery_id}", response_model=DeliveryResponse)
 def read_delivery(delivery_id: int, db: Session = Depends(get_db)):
     delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
-    return {"delivery": delivery}
+    return delivery
 
 
-@app.put("/deliveries/{delivery_id}")
+@app.get("/deliveries/by-order-id/{order_id}", response_model=DeliveryResponse)
+def read_delivery_by_order_id(order_id: int, db: Session = Depends(get_db)):
+    delivery = db.query(Delivery).filter(Delivery.order_id == order_id).first()
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    return delivery
+
+
+@app.put("/deliveries/{delivery_id}", response_model=DeliveryResponse)
 def update_delivery(
     delivery_id: int, delivery: DeliveryCreate, db: Session = Depends(get_db)
 ):
     db_delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
     if not db_delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
-    db_delivery.order_number = delivery.order_number
+    db_delivery.order_id = delivery.order_id
     db_delivery.delivery_address = delivery.delivery_address
     db_delivery.delivery_date = delivery.delivery_date
     db_delivery.status = delivery.status
+    db_delivery.city = delivery.city
+    db_delivery.state = delivery.state
+    db_delivery.country = delivery.country
+    db_delivery.zip_code = delivery.zip_code
     db.commit()
     db.refresh(db_delivery)
-    return {"message": "Delivery updated successfully"}
+    return db_delivery
+
+
+@app.put("/deliveries/{delivery_id}/status", response_model=DeliveryResponse)
+def update_delivery_status(
+    delivery_id: int,
+    status_update: DeliveryStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    db_delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
+    if not db_delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+
+    db_delivery.status = status_update.status
+    db.commit()
+    db.refresh(db_delivery)
+    return db_delivery
 
 
 @app.delete("/deliveries/{delivery_id}")
