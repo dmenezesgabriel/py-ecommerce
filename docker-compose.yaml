@@ -31,6 +31,8 @@ services:
       - "8003:8003"
     volumes:
       - ./payments:/app
+    depends_on:
+      - mongo
     networks:
       - ecommerce_network
     command: uvicorn payments_service:app --host 0.0.0.0 --port 8003 --reload

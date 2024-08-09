@@ -2,22 +2,29 @@ import os
 from enum import Enum
 from typing import List
 
-import tinydb
+import pymongo
+from bson.objectid import ObjectId
 from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel
-from tinydb import Query
+from pydantic import BaseModel, Field
+from pymongo import MongoClient
 
 app = FastAPI()
 
-# Database setup
-db_file = "payments.json"
+# MongoDB setup
+MONGO_HOST = os.getenv("MONGO_HOST", "mongo")
+MONGO_PORT = int(os.getenv("MONGO_PORT", 27017))
+MONGO_DB = os.getenv("MONGO_DB", "payments")
+MONGO_USER = os.getenv("MONGO_USER", "mongo")
+MONGO_PASS = os.getenv("MONGO_PASS", "mongo")
 
-# Ensure the data file exists
-if not os.path.exists(db_file):
-    open(db_file, "w").close()  # Create an empty file if it doesn't exist
-
-db = tinydb.TinyDB(db_file)
-payments_table = db.table("payments")
+client = MongoClient(
+    host=MONGO_HOST,
+    port=MONGO_PORT,
+    username=MONGO_USER,
+    password=MONGO_PASS,
+)
+db = client[MONGO_DB]
+payments_collection = db["payments"]
 
 
 class PaymentStatus(str, Enum):
@@ -28,10 +35,16 @@ class PaymentStatus(str, Enum):
 
 
 class Payment(BaseModel):
-    id: int
+    id: str = Field(default=None)
     order_id: int
     amount: float
     status: PaymentStatus
+
+    class Config:
+        orm_mode = True
+        json_encoders = {
+            ObjectId: str,
+        }
 
 
 class PaymentStatusUpdate(BaseModel):
@@ -41,95 +54,87 @@ class PaymentStatusUpdate(BaseModel):
 @app.on_event("startup")
 def on_startup():
     # Clear all existing data
-    db.truncate()  # Clear all data from all tables/collections
-
-    # Optionally, you can prepopulate with default data here
-    # Example: payments_table.insert({"id": 1, "order_id": 1, "amount": 100.0, "status": "pending"})
+    payments_collection.delete_many(
+        {}
+    )  # Clear all documents from the collection
 
 
 @app.post("/payments/", response_model=Payment)
 def create_payment(payment: Payment):
-    # Check if ID already exists
-    if payments_table.get(Query().id == payment.id):
+    # Check if order_id already exists
+    if payments_collection.find_one({"order_id": payment.order_id}):
         raise HTTPException(
-            status_code=400, detail="Payment with this ID already exists"
+            status_code=400, detail="Payment with this order_id already exists"
         )
 
-    payments_table.insert(payment.dict())
-    return payment
+    payment_dict = payment.dict(exclude_unset=True)
+    result = payments_collection.insert_one(payment_dict)
+    payment_dict["id"] = str(result.inserted_id)
+    return Payment(**payment_dict)
 
 
 @app.get("/payments/", response_model=List[Payment])
 def read_payments():
-    payments = payments_table.all()
-    # Adjust data to match Pydantic model
-    return [
-        Payment(
-            id=payment.get("id"),
-            order_id=payment.get("order_id"),
-            amount=payment.get("amount"),
-            status=PaymentStatus(payment.get("status")),
-        )
-        for payment in payments
-    ]
+    payments = payments_collection.find()
+    return [Payment(**payment, id=str(payment["_id"])) for payment in payments]
 
 
 @app.get("/payments/{payment_id}", response_model=Payment)
-def read_payment(payment_id: int):
-    payment = payments_table.get(Query().id == payment_id)
+def read_payment(payment_id: str):
+    payment = payments_collection.find_one({"_id": ObjectId(payment_id)})
     if payment is None:
         raise HTTPException(status_code=404, detail="Payment not found")
-    return Payment(
-        id=payment.get("id"),
-        order_id=payment.get("order_id"),
-        amount=payment.get("amount"),
-        status=PaymentStatus(payment.get("status")),
-    )
+    payment["id"] = str(payment["_id"])
+    return Payment(**payment)
 
 
 @app.get("/payments/by-order-id/{order_id}", response_model=Payment)
 def read_payment_by_order_id(order_id: int):
-    payment = payments_table.get(Query().order_id == order_id)
+    payment = payments_collection.find_one({"order_id": order_id})
     if payment is None:
         raise HTTPException(status_code=404, detail="Payment not found")
-    return Payment(
-        id=payment.get("id"),
-        order_id=payment.get("order_id"),
-        amount=payment.get("amount"),
-        status=PaymentStatus(payment.get("status")),
-    )
+    payment["id"] = str(payment["_id"])
+    return Payment(**payment)
 
 
 @app.put("/payments/{payment_id}", response_model=Payment)
-def update_payment(payment_id: int, payment: Payment):
-    existing_payment = payments_table.get(Query().id == payment_id)
+def update_payment(payment_id: str, payment: Payment):
+    existing_payment = payments_collection.find_one(
+        {"_id": ObjectId(payment_id)}
+    )
     if existing_payment is None:
         raise HTTPException(status_code=404, detail="Payment not found")
 
-    payments_table.update(payment.dict(), Query().id == payment_id)
-    return payment
+    payment_dict = payment.dict(exclude_unset=True)
+    payments_collection.replace_one(
+        {"_id": ObjectId(payment_id)}, payment_dict
+    )
+    payment_dict["id"] = payment_id
+    return Payment(**payment_dict)
 
 
 @app.put("/payments/{payment_id}/status", response_model=Payment)
-def update_payment_status(payment_id: int, status_update: PaymentStatusUpdate):
-    existing_payment = payments_table.get(Query().id == payment_id)
+def update_payment_status(payment_id: str, status_update: PaymentStatusUpdate):
+    existing_payment = payments_collection.find_one(
+        {"_id": ObjectId(payment_id)}
+    )
     if existing_payment is None:
         raise HTTPException(status_code=404, detail="Payment not found")
 
-    payments_table.update(
-        {"status": status_update.status.value}, Query().id == payment_id
+    payments_collection.update_one(
+        {"_id": ObjectId(payment_id)},
+        {"$set": {"status": status_update.status}},
     )
-    updated_payment = payments_table.get(Query().id == payment_id)
-    return Payment(
-        id=updated_payment.get("id"),
-        order_id=updated_payment.get("order_id"),
-        amount=updated_payment.get("amount"),
-        status=PaymentStatus(updated_payment.get("status")),
+    updated_payment = payments_collection.find_one(
+        {"_id": ObjectId(payment_id)}
     )
+    updated_payment["id"] = payment_id
+    return Payment(**updated_payment)
 
 
 @app.delete("/payments/{payment_id}")
-def delete_payment(payment_id: int):
-    if not payments_table.remove(Query().id == payment_id):
+def delete_payment(payment_id: str):
+    result = payments_collection.delete_one({"_id": ObjectId(payment_id)})
+    if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Payment not found")
     return {"detail": "Payment deleted"}
