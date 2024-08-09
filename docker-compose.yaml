@@ -58,6 +58,20 @@ services:
       - POSTGRES_PASSWORD=postgres
     volumes:
       - postgres_ecommerce:/var/lib/postgresql/data
+      - ./scripts/postgres:/docker-entrypoint-initdb.d
+    networks:
+      - ecommerce_network
+
+  mongo:
+    image: mongo:8.0.0-rc11-jammy
+    hostname: mongo-db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_ecommerce:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=mongo
+      - MONGO_INITDB_ROOT_PASSWORD=mongo
     networks:
       - ecommerce_network
 
@@ -67,8 +81,11 @@ services:
       - 5672:5672
       - 15672:15672
     environment:
-      RABBITMQ_DEFAULT_USER: rabbitmq
-      RABBITMQ_DEFAULT_PASS: rabbitmq
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - ./conf/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./conf/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
     networks:
       - ecommerce_network
 
@@ -78,3 +95,4 @@ networks:
 
 volumes:
   postgres_ecommerce:
+  mongo_ecommerce:
