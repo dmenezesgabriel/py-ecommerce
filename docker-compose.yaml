@@ -11,6 +11,18 @@ services:
       - ecommerce_network
     command: uvicorn inventory_service:app --host 0.0.0.0 --port 8001 --reload
 
+  inventory_worker:
+    build:
+      context: ./inventory
+      dockerfile: Dockerfile.inventory
+    volumes:
+      - ./inventory:/app
+    networks:
+      - ecommerce_network
+    depends_on:
+      - rabbitmq
+    command: celery -A celery_worker worker --loglevel=info
+
   orders_service:
     build:
       context: ./orders
