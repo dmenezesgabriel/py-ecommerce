@@ -1,18 +1,14 @@
-# inventory_service.py
-
+import json
+import logging
 import os
+import threading
 from typing import List, Optional
 
+import pika
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import (
-    Column,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    create_engine,
-)
+from sqlalchemy import (Column, Float, ForeignKey, Integer, String,
+                        create_engine)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
 
@@ -30,6 +26,18 @@ if not os.path.exists("/app/data"):
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Set up logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 
 # Custom Exceptions
@@ -458,12 +466,69 @@ class SQLAlchemyCategoryRepository(CategoryRepository):
         ]
 
 
+# Subscriber Adapter using Pika
+class InventorySubscriber:
+    def __init__(self, product_service: ProductService):
+        self.product_service = product_service
+        self.connection_params = pika.ConnectionParameters(host="rabbitmq")
+        self.connection = pika.BlockingConnection(self.connection_params)
+        self.channel = self.connection.channel()
+
+    def start_consuming(self):
+        self.channel.exchange_declare(
+            exchange="inventory_exchange", exchange_type="direct", durable=True
+        )
+        self.channel.queue_declare(queue="inventory_queue", durable=True)
+        self.channel.queue_bind(
+            exchange="inventory_exchange",
+            queue="inventory_queue",
+            routing_key="inventory_queue",
+        )
+
+        self.channel.basic_consume(
+            queue="inventory_queue",
+            on_message_callback=self.on_message,
+            auto_ack=False,
+        )
+
+        logger.info("Starting to consume messages from inventory_queue.")
+        self.channel.start_consuming()
+
+    def on_message(self, ch, method, properties, body):
+        logger.info(f"Received message from inventory_queue: {body}")
+        try:
+            data = json.loads(
+                body.decode("utf-8")
+            )  # Decode the message as a JSON string
+            sku = data.get("sku")
+            action = data.get("action")
+            quantity = data.get("quantity")
+
+            if action == "add":
+                self.product_service.add_inventory(sku, quantity)
+                logger.info(f"Added {quantity} to SKU: {sku}.")
+            elif action == "subtract":
+                self.product_service.subtract_inventory(sku, quantity)
+                logger.info(f"Subtracted {quantity} from SKU: {sku}.")
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+        finally:
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+
+
 # FastAPI Routes (Adapter)
 @app.on_event("startup")
 def on_startup():
-    # Drop all tables and recreate them
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    product_repository = SQLAlchemyProductRepository(db)
+    category_repository = SQLAlchemyCategoryRepository(db)
+    product_service = ProductService(product_repository, category_repository)
+
+    inventory_subscriber = InventorySubscriber(product_service)
+    threading.Thread(target=inventory_subscriber.start_consuming).start()
 
 
 def get_db():

@@ -1,9 +1,11 @@
+import json
 import os
 import uuid
 from enum import Enum as PyEnum
 from typing import List, Optional
 
-import aiohttp  # For making asynchronous HTTP requests
+import aiohttp
+import pika
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import Column, Enum, ForeignKey, Integer, String, create_engine
@@ -331,50 +333,39 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
         ]
 
 
+# Publisher Adapter using Pika
+class InventoryPublisher:
+    def __init__(self, connection_params):
+        self.connection = pika.BlockingConnection(connection_params)
+        self.channel = self.connection.channel()
+        self.exchange_name = "inventory_exchange"
+
+    def publish_inventory_update(self, sku: str, action: str, quantity: int):
+        message = json.dumps(
+            {  # Properly encode the message as a JSON string with double quotes
+                "sku": sku,
+                "action": action,
+                "quantity": quantity,
+            }
+        )
+        self.channel.basic_publish(
+            exchange=self.exchange_name,
+            routing_key="inventory_queue",
+            body=message,  # Send the message as a properly formatted JSON string
+        )
+
+
 # Services
 class OrderService:
     def __init__(
         self,
         order_repository: OrderRepository,
         customer_repository: CustomerRepository,
+        inventory_publisher: InventoryPublisher,
     ):
         self.order_repository = order_repository
         self.customer_repository = customer_repository
-
-    async def check_inventory(
-        self, sku: str, quantity: int, session: aiohttp.ClientSession
-    ):
-        async with session.get(
-            f"http://inventory_service:8001/products/{sku}"
-        ) as response:
-            if response.status != 200:
-                raise HTTPException(
-                    status_code=404, detail=f"Product {sku} not found"
-                )
-            product = await response.json()
-            if product["quantity"] < quantity:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Not enough inventory for product {sku}",
-                )
-            return product["price"]
-
-    async def adjust_inventory(
-        self,
-        sku: str,
-        quantity: int,
-        session: aiohttp.ClientSession,
-        action: str,
-    ):
-        async with session.post(
-            f"http://inventory_service:8001/inventory/{sku}/{action}",
-            json={"quantity": quantity},
-        ) as response:
-            if response.status != 200:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Failed to {action} inventory",
-                )
+        self.inventory_publisher = inventory_publisher
 
     async def create_order(
         self, customer: CustomerEntity, order_items: List[OrderItemEntity]
@@ -393,28 +384,24 @@ class OrderService:
             order_items=order_items,
         )
 
-        async with aiohttp.ClientSession() as session:
-            try:
-                total_amount = 0.0
-                for item in order_items:
-                    product_price = await self.check_inventory(
-                        item.product_sku, item.quantity, session
-                    )
-                    await self.adjust_inventory(
-                        item.product_sku, item.quantity, session, "subtract"
-                    )
-                    total_amount += product_price * item.quantity
+        try:
+            total_amount = 0.0
+            for item in order_items:
+                # Publish message to subtract inventory
+                self.inventory_publisher.publish_inventory_update(
+                    item.product_sku, "subtract", item.quantity
+                )
 
-                self.order_repository.save(order)
-                return order, total_amount
+            self.order_repository.save(order)
+            return order, total_amount
 
-            except Exception as e:
-                # Rollback inventory if there's any error
-                for item in order_items:
-                    await self.adjust_inventory(
-                        item.product_sku, item.quantity, session, "add"
-                    )
-                raise e
+        except Exception as e:
+            # Rollback inventory if there's any error
+            for item in order_items:
+                self.inventory_publisher.publish_inventory_update(
+                    item.product_sku, "add", item.quantity
+                )
+            raise e
 
     def get_order_by_id(self, order_id: int) -> OrderEntity:
         order = self.order_repository.find_by_id(order_id)
@@ -452,62 +439,49 @@ class OrderService:
         # Inventory adjustments to revert if needed
         inventory_changes = []
 
-        async with aiohttp.ClientSession() as session:
-            try:
-                # Get current order items to compare
-                current_order_items = {
-                    item.product_sku: item.quantity
-                    for item in order.order_items
-                }
+        try:
+            # Get current order items to compare
+            current_order_items = {
+                item.product_sku: item.quantity for item in order.order_items
+            }
 
-                total_amount = 0.0
-                for item in order_items:
-                    if item.product_sku in current_order_items:
-                        old_quantity = current_order_items[item.product_sku]
-                        if item.quantity > old_quantity:
-                            diff = item.quantity - old_quantity
-                            await self.adjust_inventory(
-                                item.product_sku, diff, session, "subtract"
-                            )
-                            inventory_changes.append((item.product_sku, diff))
-                        elif item.quantity < old_quantity:
-                            diff = old_quantity - item.quantity
-                            await self.adjust_inventory(
-                                item.product_sku, diff, session, "add"
-                            )
-                            inventory_changes.append((item.product_sku, -diff))
-                    else:
-                        await self.check_inventory(
-                            item.product_sku, item.quantity, session
+            total_amount = 0.0
+            for item in order_items:
+                if item.product_sku in current_order_items:
+                    old_quantity = current_order_items[item.product_sku]
+                    if item.quantity > old_quantity:
+                        diff = item.quantity - old_quantity
+                        self.inventory_publisher.publish_inventory_update(
+                            item.product_sku, "subtract", diff
                         )
-                        await self.adjust_inventory(
-                            item.product_sku,
-                            item.quantity,
-                            session,
-                            "subtract",
+                        inventory_changes.append((item.product_sku, diff))
+                    elif item.quantity < old_quantity:
+                        diff = old_quantity - item.quantity
+                        self.inventory_publisher.publish_inventory_update(
+                            item.product_sku, "add", diff
                         )
-                        inventory_changes.append(
-                            (item.product_sku, item.quantity)
-                        )
-
-                    product_price = await self.check_inventory(
-                        item.product_sku, item.quantity, session
+                        inventory_changes.append((item.product_sku, -diff))
+                else:
+                    self.inventory_publisher.publish_inventory_update(
+                        item.product_sku,
+                        "subtract",
+                        item.quantity,
                     )
-                    total_amount += product_price * item.quantity
+                    inventory_changes.append((item.product_sku, item.quantity))
 
-                order.customer = existing_customer
-                order.order_items = order_items
-                self.order_repository.save(order)
-                return order, total_amount
+            order.customer = existing_customer
+            order.order_items = order_items
+            self.order_repository.save(order)
+            return order, total_amount
 
-            except Exception as e:
-                # Rollback inventory if there's any error
-                for sku, quantity in inventory_changes:
-                    action = "add" if quantity > 0 else "subtract"
-                    await self.adjust_inventory(
-                        sku, abs(quantity), session, action
-                    )
-                raise e
+        except Exception as e:
+            # Rollback inventory if there's any error
+            for sku, quantity in inventory_changes:
+                action = "add" if quantity > 0 else "subtract"
+                self.inventory_publisher.publish_inventory_update(
+                    sku, action, abs(quantity)
+                )
+            raise e
 
     def update_order_status(
         self, order_id: int, status: OrderStatus
@@ -547,10 +521,20 @@ def get_db():
         db.close()
 
 
-def get_order_service(db: Session = Depends(get_db)) -> OrderService:
+def get_inventory_publisher() -> InventoryPublisher:
+    connection_params = pika.ConnectionParameters(host="rabbitmq")
+    return InventoryPublisher(connection_params)
+
+
+def get_order_service(
+    db: Session = Depends(get_db),
+    inventory_publisher: InventoryPublisher = Depends(get_inventory_publisher),
+) -> OrderService:
     order_repository = SQLAlchemyOrderRepository(db)
     customer_repository = SQLAlchemyCustomerRepository(db)
-    return OrderService(order_repository, customer_repository)
+    return OrderService(
+        order_repository, customer_repository, inventory_publisher
+    )
 
 
 # Pydantic Models for API
