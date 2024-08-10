@@ -31,11 +31,65 @@
       "arguments": {
         "x-queue-type": "classic"
       }
+    },
+    {
+      "name": "inventory_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    },
+    {
+      "name": "delivery_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    },
+    {
+      "name": "payment_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
     }
   ],
   "exchanges": [
     {
       "name": "orders_exchange",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "inventory_exchange",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "delivery_exchange",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "payment_exchange",
       "vhost": "/",
       "type": "direct",
       "durable": true,
@@ -51,6 +105,30 @@
       "destination": "orders_queue",
       "destination_type": "queue",
       "routing_key": "orders_queue",
+      "arguments": {}
+    },
+    {
+      "source": "inventory_exchange",
+      "vhost": "/",
+      "destination": "inventory_queue",
+      "destination_type": "queue",
+      "routing_key": "inventory_queue",
+      "arguments": {}
+    },
+    {
+      "source": "delivery_exchange",
+      "vhost": "/",
+      "destination": "delivery_queue",
+      "destination_type": "queue",
+      "routing_key": "delivery_queue",
+      "arguments": {}
+    },
+    {
+      "source": "payment_exchange",
+      "vhost": "/",
+      "destination": "payment_queue",
+      "destination_type": "queue",
+      "routing_key": "payment_queue",
       "arguments": {}
     }
   ]
