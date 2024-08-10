@@ -494,6 +494,32 @@ class OrderService:
         self.order_repository.save(order)
         return order
 
+    async def confirm_order(self, order_id: int) -> OrderEntity:
+        order = self.get_order_by_id(order_id)
+        if order.status != OrderStatus.PENDING:
+            raise InvalidEntity("Only pending orders can be confirmed")
+
+        order.update_status(OrderStatus.CONFIRMED)
+        self.order_repository.save(order)
+        return order
+
+    async def cancel_order(self, order_id: int) -> OrderEntity:
+        order = self.get_order_by_id(order_id)
+        if order.status not in [OrderStatus.PENDING, OrderStatus.CONFIRMED]:
+            raise InvalidEntity(
+                "Only pending or confirmed orders can be canceled"
+            )
+
+        # Revert inventory
+        for item in order.order_items:
+            self.inventory_publisher.publish_inventory_update(
+                item.product_sku, "add", item.quantity
+            )
+
+        order.update_status(OrderStatus.CANCELED)
+        self.order_repository.save(order)
+        return order
+
     def delete_order(self, order_id: int) -> OrderEntity:
         order = self.order_repository.find_by_id(order_id)
         if not order:
@@ -705,6 +731,30 @@ async def update_order_status(
         return serialize_order(updated_order, total_amount)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.put("/orders/{order_id}/confirm", response_model=OrderResponse)
+async def confirm_order(
+    order_id: int, service: OrderService = Depends(get_order_service)
+):
+    try:
+        confirmed_order = await service.confirm_order(order_id)
+        total_amount = await calculate_order_total(confirmed_order)
+        return serialize_order(confirmed_order, total_amount)
+    except (EntityNotFound, InvalidEntity) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/orders/{order_id}/cancel", response_model=OrderResponse)
+async def cancel_order(
+    order_id: int, service: OrderService = Depends(get_order_service)
+):
+    try:
+        canceled_order = await service.cancel_order(order_id)
+        total_amount = await calculate_order_total(canceled_order)
+        return serialize_order(canceled_order, total_amount)
+    except (EntityNotFound, InvalidEntity) as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.delete("/orders/{order_id}", status_code=204)
