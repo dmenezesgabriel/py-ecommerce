@@ -50,14 +50,34 @@ class Category:
         self.name = name
 
 
+class Price:
+    def __init__(self, amount: float, id: Optional[int] = None):
+        self.id = id
+        self.amount = amount
+
+
+class Inventory:
+    def __init__(self, quantity: int, id: Optional[int] = None):
+        self.id = id
+        self.quantity = quantity
+
+    def add_quantity(self, amount: int):
+        self.quantity += amount
+
+    def subtract_quantity(self, amount: int):
+        if self.quantity < amount:
+            raise InvalidEntity("Not enough inventory to subtract")
+        self.quantity -= amount
+
+
 class Product:
     def __init__(
         self,
         sku: str,
         name: str,
         category: Category,
-        price: float,
-        quantity: int,
+        price: Price,
+        inventory: Inventory,
         id: Optional[int] = None,
     ):
         self.id = id
@@ -65,15 +85,16 @@ class Product:
         self.name = name
         self.category = category
         self.price = price
-        self.quantity = quantity
+        self.inventory = inventory
 
-    def update_inventory(self, quantity: int):
-        if quantity < 0 and self.quantity + quantity < 0:
-            raise InvalidEntity("Not enough inventory to subtract")
-        self.quantity += quantity
+    def add_inventory(self, quantity: int):
+        self.inventory.add_quantity(quantity)
 
-    def set_price(self, price: float):
-        self.price = price
+    def subtract_inventory(self, quantity: int):
+        self.inventory.subtract_quantity(quantity)
+
+    def set_price(self, amount: float):
+        self.price.amount = amount
 
 
 # Services
@@ -101,7 +122,9 @@ class ProductService:
                 f"Product with SKU '{sku}' already exists"
             )
 
-        product = Product(sku, name, category, price, quantity)
+        price_entity = Price(amount=price)
+        inventory_entity = Inventory(quantity=quantity)
+        product = Product(sku, name, category, price_entity, inventory_entity)
         self.product_repository.save(product)
         return product
 
@@ -131,7 +154,7 @@ class ProductService:
         product.name = name
         product.category = category
         product.set_price(price)
-        product.update_inventory(quantity)
+        product.add_inventory(quantity)
         self.product_repository.save(product)
         return product
 
@@ -157,7 +180,7 @@ class ProductService:
         if not product:
             raise EntityNotFound(f"Product with SKU '{sku}' not found")
 
-        product.update_inventory(quantity)
+        product.add_inventory(quantity)
         self.product_repository.save(product)
         return product
 
@@ -166,7 +189,7 @@ class ProductService:
         if not product:
             raise EntityNotFound(f"Product with SKU '{sku}' not found")
 
-        product.update_inventory(-quantity)
+        product.subtract_inventory(quantity)
         self.product_repository.save(product)
         return product
 
@@ -279,17 +302,19 @@ class SQLAlchemyProductRepository(ProductRepository):
                 name=product.name,
                 category_id=category_model.id,
             )
-        db_product.name = product.name
-        db_product.sku = product.sku
-        db_product.category_id = category_model.id
+            self.db.add(db_product)
+            self.db.commit()
+            self.db.refresh(db_product)
+
         db_product.price = PriceModel(
-            product_id=db_product.id, amount=product.price
+            product_id=db_product.id, amount=product.price.amount
         )
         db_product.inventory = InventoryModel(
-            product_id=db_product.id, quantity=product.quantity
+            product_id=db_product.id, quantity=product.inventory.quantity
         )
 
-        self.db.add(db_product)
+        self.db.add(db_product.price)
+        self.db.add(db_product.inventory)
         self.db.commit()
         self.db.refresh(db_product)
 
@@ -308,8 +333,13 @@ class SQLAlchemyProductRepository(ProductRepository):
                 sku=db_product.sku,
                 name=db_product.name,
                 category=Category(id=category.id, name=category.name),
-                price=db_product.price.amount,
-                quantity=db_product.inventory.quantity,
+                price=Price(
+                    id=db_product.price.id, amount=db_product.price.amount
+                ),
+                inventory=Inventory(
+                    id=db_product.inventory.id,
+                    quantity=db_product.inventory.quantity,
+                ),
             )
         return None
 
@@ -346,8 +376,13 @@ class SQLAlchemyProductRepository(ProductRepository):
                 category=Category(
                     id=db_product.category.id, name=db_product.category.name
                 ),
-                price=db_product.price.amount,
-                quantity=db_product.inventory.quantity,
+                price=Price(
+                    id=db_product.price.id, amount=db_product.price.amount
+                ),
+                inventory=Inventory(
+                    id=db_product.inventory.id,
+                    quantity=db_product.inventory.quantity,
+                ),
             )
             for db_product in db_products
         ]
@@ -372,8 +407,13 @@ class SQLAlchemyProductRepository(ProductRepository):
                     category=Category(
                         id=db_category.id, name=db_category.name
                     ),
-                    price=db_product.price.amount,
-                    quantity=db_product.inventory.quantity,
+                    price=Price(
+                        id=db_product.price.id, amount=db_product.price.amount
+                    ),
+                    inventory=Inventory(
+                        id=db_product.inventory.id,
+                        quantity=db_product.inventory.quantity,
+                    ),
                 )
                 for db_product in db_products
             ]
@@ -599,8 +639,8 @@ def serialize_product(product: Product) -> ProductResponse:
         sku=product.sku,
         name=product.name,
         category_name=product.category.name,
-        price=product.price,
-        quantity=product.quantity,
+        price=product.price.amount,
+        quantity=product.inventory.quantity,
     )
 
 
