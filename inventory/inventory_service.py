@@ -1,3 +1,5 @@
+# inventory_service.py
+
 import os
 from typing import List, Optional
 
@@ -44,19 +46,19 @@ class InvalidEntity(Exception):
 
 
 # Entities
-class Category:
+class CategoryEntity:
     def __init__(self, name: str, id: Optional[int] = None):
         self.id = id
         self.name = name
 
 
-class Price:
+class PriceEntity:
     def __init__(self, amount: float, id: Optional[int] = None):
         self.id = id
         self.amount = amount
 
 
-class Inventory:
+class InventoryEntity:
     def __init__(self, quantity: int, id: Optional[int] = None):
         self.id = id
         self.quantity = quantity
@@ -70,14 +72,14 @@ class Inventory:
         self.quantity -= amount
 
 
-class Product:
+class ProductEntity:
     def __init__(
         self,
         sku: str,
         name: str,
-        category: Category,
-        price: Price,
-        inventory: Inventory,
+        category: CategoryEntity,
+        price: PriceEntity,
+        inventory: InventoryEntity,
         id: Optional[int] = None,
     ):
         self.id = id
@@ -110,10 +112,10 @@ class ProductService:
         category_name: str,
         price: float,
         quantity: int,
-    ) -> Product:
+    ) -> ProductEntity:
         category = self.category_repository.find_by_name(category_name)
         if not category:
-            category = Category(name=category_name)
+            category = CategoryEntity(name=category_name)
             self.category_repository.save(category)
 
         product = self.product_repository.find_by_sku(sku)
@@ -122,13 +124,15 @@ class ProductService:
                 f"Product with SKU '{sku}' already exists"
             )
 
-        price_entity = Price(amount=price)
-        inventory_entity = Inventory(quantity=quantity)
-        product = Product(sku, name, category, price_entity, inventory_entity)
+        price_entity = PriceEntity(amount=price)
+        inventory_entity = InventoryEntity(quantity=quantity)
+        product = ProductEntity(
+            sku, name, category, price_entity, inventory_entity
+        )
         self.product_repository.save(product)
         return product
 
-    def get_product_by_sku(self, sku: str) -> Product:
+    def get_product_by_sku(self, sku: str) -> ProductEntity:
         product = self.product_repository.find_by_sku(sku)
         if not product:
             raise EntityNotFound(f"Product with SKU '{sku}' not found")
@@ -141,14 +145,14 @@ class ProductService:
         category_name: str,
         price: float,
         quantity: int,
-    ) -> Product:
+    ) -> ProductEntity:
         product = self.product_repository.find_by_sku(sku)
         if not product:
             raise EntityNotFound(f"Product with SKU '{sku}' not found")
 
         category = self.category_repository.find_by_name(category_name)
         if not category:
-            category = Category(name=category_name)
+            category = CategoryEntity(name=category_name)
             self.category_repository.save(category)
 
         product.name = name
@@ -158,7 +162,7 @@ class ProductService:
         self.product_repository.save(product)
         return product
 
-    def delete_product(self, sku: str) -> Product:
+    def delete_product(self, sku: str) -> ProductEntity:
         product = self.product_repository.find_by_sku(sku)
         if not product:
             raise EntityNotFound(f"Product with SKU '{sku}' not found")
@@ -166,16 +170,18 @@ class ProductService:
         self.product_repository.delete(product)
         return product
 
-    def list_products(self) -> List[Product]:
+    def list_products(self) -> List[ProductEntity]:
         return self.product_repository.list_all()
 
-    def get_products_by_category(self, category_name: str) -> List[Product]:
+    def get_products_by_category(
+        self, category_name: str
+    ) -> List[ProductEntity]:
         category = self.category_repository.find_by_name(category_name)
         if not category:
             raise EntityNotFound(f"Category '{category_name}' not found")
         return self.product_repository.find_by_category(category)
 
-    def add_inventory(self, sku: str, quantity: int) -> Product:
+    def add_inventory(self, sku: str, quantity: int) -> ProductEntity:
         product = self.product_repository.find_by_sku(sku)
         if not product:
             raise EntityNotFound(f"Product with SKU '{sku}' not found")
@@ -184,7 +190,7 @@ class ProductService:
         self.product_repository.save(product)
         return product
 
-    def subtract_inventory(self, sku: str, quantity: int) -> Product:
+    def subtract_inventory(self, sku: str, quantity: int) -> ProductEntity:
         product = self.product_repository.find_by_sku(sku)
         if not product:
             raise EntityNotFound(f"Product with SKU '{sku}' not found")
@@ -193,46 +199,48 @@ class ProductService:
         self.product_repository.save(product)
         return product
 
-    def create_category(self, name: str) -> Category:
+    def create_category(self, name: str) -> CategoryEntity:
         category = self.category_repository.find_by_name(name)
         if category:
             raise EntityAlreadyExists(
                 f"Category with name '{name}' already exists"
             )
-        category = Category(name=name)
+        category = CategoryEntity(name=name)
         self.category_repository.save(category)
         return category
 
-    def list_categories(self) -> List[Category]:
+    def list_categories(self) -> List[CategoryEntity]:
         return self.category_repository.list_all()
 
 
 # Ports (Interfaces)
 class ProductRepository:
-    def save(self, product: Product):
+    def save(self, product: ProductEntity):
         raise NotImplementedError
 
-    def find_by_sku(self, sku: str) -> Optional[Product]:
+    def find_by_sku(self, sku: str) -> Optional[ProductEntity]:
         raise NotImplementedError
 
-    def delete(self, product: Product):
+    def delete(self, product: ProductEntity):
         raise NotImplementedError
 
-    def list_all(self) -> List[Product]:
+    def list_all(self) -> List[ProductEntity]:
         raise NotImplementedError
 
-    def find_by_category(self, category: Category) -> List[Product]:
+    def find_by_category(
+        self, category: CategoryEntity
+    ) -> List[ProductEntity]:
         raise NotImplementedError
 
 
 class CategoryRepository:
-    def save(self, category: Category):
+    def save(self, category: CategoryEntity):
         raise NotImplementedError
 
-    def find_by_name(self, name: str) -> Optional[Category]:
+    def find_by_name(self, name: str) -> Optional[CategoryEntity]:
         raise NotImplementedError
 
-    def list_all(self) -> List[Category]:
+    def list_all(self) -> List[CategoryEntity]:
         raise NotImplementedError
 
 
@@ -278,7 +286,7 @@ class SQLAlchemyProductRepository(ProductRepository):
     def __init__(self, db: Session):
         self.db = db
 
-    def save(self, product: Product):
+    def save(self, product: ProductEntity):
         category_model = (
             self.db.query(CategoryModel)
             .filter(CategoryModel.name == product.category.name)
@@ -318,7 +326,7 @@ class SQLAlchemyProductRepository(ProductRepository):
         self.db.commit()
         self.db.refresh(db_product)
 
-    def find_by_sku(self, sku: str) -> Optional[Product]:
+    def find_by_sku(self, sku: str) -> Optional[ProductEntity]:
         db_product = (
             self.db.query(ProductModel).filter(ProductModel.sku == sku).first()
         )
@@ -328,22 +336,22 @@ class SQLAlchemyProductRepository(ProductRepository):
                 .filter(CategoryModel.id == db_product.category_id)
                 .first()
             )
-            return Product(
+            return ProductEntity(
                 id=db_product.id,
                 sku=db_product.sku,
                 name=db_product.name,
-                category=Category(id=category.id, name=category.name),
-                price=Price(
+                category=CategoryEntity(id=category.id, name=category.name),
+                price=PriceEntity(
                     id=db_product.price.id, amount=db_product.price.amount
                 ),
-                inventory=Inventory(
+                inventory=InventoryEntity(
                     id=db_product.inventory.id,
                     quantity=db_product.inventory.quantity,
                 ),
             )
         return None
 
-    def delete(self, product: Product):
+    def delete(self, product: ProductEntity):
         db_product = (
             self.db.query(ProductModel)
             .filter(ProductModel.sku == product.sku)
@@ -366,20 +374,20 @@ class SQLAlchemyProductRepository(ProductRepository):
             self.db.delete(db_product)
             self.db.commit()
 
-    def list_all(self) -> List[Product]:
+    def list_all(self) -> List[ProductEntity]:
         db_products = self.db.query(ProductModel).all()
         return [
-            Product(
+            ProductEntity(
                 id=db_product.id,
                 sku=db_product.sku,
                 name=db_product.name,
-                category=Category(
+                category=CategoryEntity(
                     id=db_product.category.id, name=db_product.category.name
                 ),
-                price=Price(
+                price=PriceEntity(
                     id=db_product.price.id, amount=db_product.price.amount
                 ),
-                inventory=Inventory(
+                inventory=InventoryEntity(
                     id=db_product.inventory.id,
                     quantity=db_product.inventory.quantity,
                 ),
@@ -387,7 +395,9 @@ class SQLAlchemyProductRepository(ProductRepository):
             for db_product in db_products
         ]
 
-    def find_by_category(self, category: Category) -> List[Product]:
+    def find_by_category(
+        self, category: CategoryEntity
+    ) -> List[ProductEntity]:
         db_category = (
             self.db.query(CategoryModel)
             .filter(CategoryModel.name == category.name)
@@ -400,17 +410,17 @@ class SQLAlchemyProductRepository(ProductRepository):
                 .all()
             )
             return [
-                Product(
+                ProductEntity(
                     id=db_product.id,
                     sku=db_product.sku,
                     name=db_product.name,
-                    category=Category(
+                    category=CategoryEntity(
                         id=db_category.id, name=db_category.name
                     ),
-                    price=Price(
+                    price=PriceEntity(
                         id=db_product.price.id, amount=db_product.price.amount
                     ),
-                    inventory=Inventory(
+                    inventory=InventoryEntity(
                         id=db_product.inventory.id,
                         quantity=db_product.inventory.quantity,
                     ),
@@ -424,26 +434,26 @@ class SQLAlchemyCategoryRepository(CategoryRepository):
     def __init__(self, db: Session):
         self.db = db
 
-    def save(self, category: Category):
+    def save(self, category: CategoryEntity):
         db_category = CategoryModel(name=category.name)
         self.db.add(db_category)
         self.db.commit()
         self.db.refresh(db_category)
 
-    def find_by_name(self, name: str) -> Optional[Category]:
+    def find_by_name(self, name: str) -> Optional[CategoryEntity]:
         db_category = (
             self.db.query(CategoryModel)
             .filter(CategoryModel.name == name)
             .first()
         )
         if db_category:
-            return Category(id=db_category.id, name=db_category.name)
+            return CategoryEntity(id=db_category.id, name=db_category.name)
         return None
 
-    def list_all(self) -> List[Category]:
+    def list_all(self) -> List[CategoryEntity]:
         db_categories = self.db.query(CategoryModel).all()
         return [
-            Category(id=db_category.id, name=db_category.name)
+            CategoryEntity(id=db_category.id, name=db_category.name)
             for db_category in db_categories
         ]
 
@@ -634,7 +644,7 @@ def list_categories(service: ProductService = Depends(get_product_service)):
 
 
 # Serialization Functions
-def serialize_product(product: Product) -> ProductResponse:
+def serialize_product(product: ProductEntity) -> ProductResponse:
     return ProductResponse(
         sku=product.sku,
         name=product.name,
@@ -644,7 +654,7 @@ def serialize_product(product: Product) -> ProductResponse:
     )
 
 
-def serialize_category(category: Category) -> CategoryResponse:
+def serialize_category(category: CategoryEntity) -> CategoryResponse:
     return CategoryResponse(
         id=category.id,
         name=category.name,
