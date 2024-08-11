@@ -64,7 +64,7 @@
     {
       "name": "orders_exchange",
       "vhost": "/",
-      "type": "direct",
+      "type": "topic",
       "durable": true,
       "auto_delete": false,
       "internal": false,
@@ -82,7 +82,7 @@
     {
       "name": "delivery_exchange",
       "vhost": "/",
-      "type": "direct",
+      "type": "topic",
       "durable": true,
       "auto_delete": false,
       "internal": false,
@@ -91,7 +91,7 @@
     {
       "name": "payment_exchange",
       "vhost": "/",
-      "type": "direct",
+      "type": "topic",
       "durable": true,
       "auto_delete": false,
       "internal": false,
