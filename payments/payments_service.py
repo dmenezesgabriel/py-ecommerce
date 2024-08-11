@@ -1,9 +1,11 @@
-# payment_service.py
-
+import json
+import logging
 import os
+import threading
 from enum import Enum
 from typing import List, Optional
 
+import pika
 from bson.objectid import ObjectId
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -26,6 +28,18 @@ client = MongoClient(
 )
 db = client[MONGO_DB]
 payments_collection = db["payments"]
+
+# Set up logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 
 # Custom Exceptions
@@ -177,6 +191,55 @@ class MongoDBPaymentRepository(PaymentRepository):
         self.db.delete_one({"_id": ObjectId(payment.id)})
 
 
+# Subscriber Adapter using Pika
+class OrderSubscriber:
+    def __init__(self, payment_service: PaymentService):
+        self.payment_service = payment_service
+        self.connection_params = pika.ConnectionParameters(host="rabbitmq")
+        self.connection = pika.BlockingConnection(self.connection_params)
+        self.channel = self.connection.channel()
+
+    def start_consuming(self):
+        self.channel.exchange_declare(
+            exchange="orders_exchange", exchange_type="topic", durable=True
+        )
+        self.channel.queue_declare(queue="orders_queue", durable=True)
+        self.channel.queue_bind(
+            exchange="orders_exchange",
+            queue="orders_queue",
+            routing_key="orders_queue",
+        )
+
+        self.channel.basic_consume(
+            queue="orders_queue",
+            on_message_callback=self.on_message,
+            auto_ack=False,
+        )
+
+        logger.info("Starting to consume messages from orders_queue.")
+        self.channel.start_consuming()
+
+    def on_message(self, ch, method, properties, body):
+        logger.info(f"Received message from orders_queue: {body}")
+        try:
+            data = json.loads(body.decode("utf-8"))
+            order_id = data.get("order_id")
+            amount = data.get("amount")
+            status = data.get("status")
+
+            if status == "pending":
+                self.payment_service.create_payment(
+                    order_id=order_id, amount=amount, status="pending"
+                )
+                logger.info(
+                    f"Created pending payment for order ID: {order_id}."
+                )
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+        finally:
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+
+
 # FastAPI Routes (Adapter)
 @app.on_event("startup")
 def on_startup():
@@ -184,6 +247,11 @@ def on_startup():
     payments_collection.delete_many(
         {}
     )  # Clear all documents from the collection
+
+    # Start the subscriber for order messages
+    payment_service = get_payment_service()
+    order_subscriber = OrderSubscriber(payment_service)
+    threading.Thread(target=order_subscriber.start_consuming).start()
 
 
 def get_payment_service() -> PaymentService:

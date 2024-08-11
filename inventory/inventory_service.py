@@ -104,6 +104,20 @@ class ProductEntity:
     def set_price(self, amount: float):
         self.price.amount = amount
 
+    def add_inventory(self, quantity: int):
+        if quantity < 0:
+            raise InvalidEntity("Quantity to add must be positive.")
+        self.inventory.quantity += quantity
+
+    def subtract_inventory(self, quantity: int):
+        if quantity < 0:
+            raise InvalidEntity("Quantity to subtract must be positive.")
+        if self.inventory.quantity < quantity:
+            raise InvalidEntity(
+                f"Cannot subtract {quantity} items. Only {self.inventory.quantity} available."
+            )
+        self.inventory.quantity -= quantity
+
 
 # Services
 class ProductService:
