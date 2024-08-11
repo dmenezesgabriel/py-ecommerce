@@ -171,6 +171,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 .filter(OrderModel.id == order.id)
                 .first()
             )
+            db_order.status = order.status
         else:
             db_order = OrderModel(
                 order_number=order.order_number,
@@ -180,6 +181,10 @@ class SQLAlchemyOrderRepository(OrderRepository):
             self.db.add(db_order)
             self.db.commit()
             self.db.refresh(db_order)
+
+        self.db.query(OrderItemModel).filter(
+            OrderItemModel.order_id == db_order.id
+        ).delete()
 
         for item in order.order_items:
             db_order_item = OrderItemModel(
@@ -408,13 +413,13 @@ class OrderService:
         )
 
         try:
-            total_amount = 0.0
             for item in order_items:
                 self.inventory_publisher.publish_inventory_update(
                     item.product_sku, "subtract", item.quantity
                 )
 
             self.order_repository.save(order)
+            total_amount = await self.calculate_order_total(order)
             return order, total_amount
 
         except Exception as e:
@@ -464,7 +469,6 @@ class OrderService:
                 item.product_sku: item.quantity for item in order.order_items
             }
 
-            total_amount = 0.0
             for item in order_items:
                 if item.product_sku in current_order_items:
                     old_quantity = current_order_items[item.product_sku]
@@ -491,6 +495,7 @@ class OrderService:
             order.customer = existing_customer
             order.order_items = order_items
             self.order_repository.save(order)
+            total_amount = await self.calculate_order_total(order)
             return order, total_amount
 
         except Exception as e:
@@ -520,7 +525,7 @@ class OrderService:
         order.update_status(OrderStatus.CONFIRMED)
         self.order_repository.save(order)
         try:
-            total_amount = await calculate_order_total(order)
+            total_amount = await self.calculate_order_total(order)
             self.order_update_publisher.publish_order_update(
                 order_id=order.id,
                 amount=total_amount,
@@ -562,6 +567,22 @@ class OrderService:
 
     def list_orders(self) -> List[OrderEntity]:
         return self.order_repository.list_all()
+
+    async def calculate_order_total(self, order: OrderEntity) -> float:
+        total_amount = 0.0
+        async with aiohttp.ClientSession() as session:
+            for item in order.order_items:
+                async with session.get(
+                    f"http://inventory_service:8001/products/{item.product_sku}"
+                ) as response:
+                    if response.status != 200:
+                        raise HTTPException(
+                            status_code=404,
+                            detail=f"Product {item.product_sku} not found",
+                        )
+                    product = await response.json()
+                    total_amount += product["price"] * item.quantity
+        return total_amount
 
 
 # FastAPI Routes (Adapter)
@@ -701,9 +722,14 @@ async def create_order(
 @app.get("/orders/", response_model=List[OrderResponse])
 async def read_orders(service: OrderService = Depends(get_order_service)):
     orders = service.list_orders()
+    orders_with_amounts = [
+        {"order": order, "amount": await service.calculate_order_total(order)}
+        for order in orders
+    ]
     return [
-        serialize_order(order, 0) for order in orders
-    ]  # total_amount not available in listing
+        serialize_order(order["order"], order["amount"])
+        for order in orders_with_amounts
+    ]
 
 
 @app.get("/orders/{order_id}", response_model=OrderResponse)
@@ -712,9 +738,7 @@ async def read_order(
 ):
     try:
         order = service.get_order_by_id(order_id)
-        total_amount = await calculate_order_total(
-            order
-        )  # Helper function to calculate total amount
+        total_amount = await service.calculate_order_total(order)
         return serialize_order(order, total_amount)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -728,9 +752,7 @@ async def read_order_by_order_number(
 ):
     try:
         order = service.get_order_by_order_number(order_number)
-        total_amount = await calculate_order_total(
-            order
-        )  # Helper function to calculate total amount
+        total_amount = await service.calculate_order_total(order)
         return serialize_order(order, total_amount)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -768,9 +790,7 @@ async def update_order_status(
         updated_order = service.update_order_status(
             order_id, status_update.status
         )
-        total_amount = await calculate_order_total(
-            updated_order
-        )  # Helper function to calculate total amount
+        total_amount = await service.calculate_order_total(updated_order)
         return serialize_order(updated_order, total_amount)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -782,7 +802,7 @@ async def confirm_order(
 ):
     try:
         confirmed_order = await service.confirm_order(order_id)
-        total_amount = await calculate_order_total(confirmed_order)
+        total_amount = await service.calculate_order_total(confirmed_order)
         return serialize_order(confirmed_order, total_amount)
     except (EntityNotFound, InvalidEntity) as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -794,7 +814,7 @@ async def cancel_order(
 ):
     try:
         canceled_order = await service.cancel_order(order_id)
-        total_amount = await calculate_order_total(canceled_order)
+        total_amount = await service.calculate_order_total(canceled_order)
         return serialize_order(canceled_order, total_amount)
     except (EntityNotFound, InvalidEntity) as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -887,20 +907,3 @@ def serialize_customer(customer: CustomerEntity) -> CustomerResponse:
         name=customer.name,
         email=customer.email,
     )
-
-
-async def calculate_order_total(order: OrderEntity) -> float:
-    total_amount = 0.0
-    async with aiohttp.ClientSession() as session:
-        for item in order.order_items:
-            async with session.get(
-                f"http://inventory_service:8001/products/{item.product_sku}"
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Product {item.product_sku} not found",
-                    )
-                product = await response.json()
-                total_amount += product["price"] * item.quantity
-    return total_amount
