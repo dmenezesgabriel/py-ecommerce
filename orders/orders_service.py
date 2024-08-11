@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import uuid
 from enum import Enum as PyEnum
@@ -24,6 +25,18 @@ if not os.path.exists("/app/data"):
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Set up logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 
 # Custom Exceptions
@@ -379,6 +392,7 @@ class OrderUpdatePublisher:
             routing_key="orders_queue",
             body=message,
         )
+        logger.info(f"Published order update: {message} to orders_queue")
 
 
 # Services

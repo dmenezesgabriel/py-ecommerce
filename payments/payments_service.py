@@ -227,7 +227,7 @@ class OrderSubscriber:
             amount = data.get("amount")
             status = data.get("status")
 
-            if status == "pending":
+            if status == "confirmed":
                 self.payment_service.create_payment(
                     order_id=order_id, amount=amount, status="pending"
                 )
