@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import threading
 import uuid
 from enum import Enum as PyEnum
 from typing import List, Optional
@@ -59,6 +60,7 @@ class OrderStatus(PyEnum):
     SHIPPED = "shipped"
     DELIVERED = "delivered"
     CANCELED = "canceled"
+    PAID = "paid"  # New status added
 
 
 class CustomerEntity:
@@ -395,6 +397,50 @@ class OrderUpdatePublisher:
         logger.info(f"Published order update: {message} to orders_queue")
 
 
+# Subscriber Adapter using Pika
+class PaymentSubscriber:
+    def __init__(self, order_service: "OrderService"):
+        self.order_service = order_service
+        self.connection_params = pika.ConnectionParameters(host="rabbitmq")
+        self.connection = pika.BlockingConnection(self.connection_params)
+        self.channel = self.connection.channel()
+
+    def start_consuming(self):
+        self.channel.exchange_declare(
+            exchange="payment_exchange", exchange_type="topic", durable=True
+        )
+        self.channel.queue_declare(queue="payment_queue", durable=True)
+        self.channel.queue_bind(
+            exchange="payment_exchange",
+            queue="payment_queue",
+            routing_key="payment_queue",
+        )
+
+        self.channel.basic_consume(
+            queue="payment_queue",
+            on_message_callback=self.on_message,
+            auto_ack=False,
+        )
+
+        logger.info("Starting to consume messages from payment_queue.")
+        self.channel.start_consuming()
+
+    def on_message(self, ch, method, properties, body):
+        logger.info(f"Received message from payment_queue: {body}")
+        try:
+            data = json.loads(body.decode("utf-8"))
+            order_id = data.get("order_id")
+            status = data.get("status")
+
+            if status == "completed":
+                self.order_service.set_paid_order(order_id)
+                logger.info(f"Order ID {order_id} marked as paid.")
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+        finally:
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+
+
 # Services
 class OrderService:
     def __init__(
@@ -531,6 +577,14 @@ class OrderService:
         self.order_repository.save(order)
         return order
 
+    def set_paid_order(self, order_id: int):
+        """Sets the order status to PAID."""
+        order = self.get_order_by_id(order_id)
+        if not order:
+            raise EntityNotFound(f"Order with ID '{order_id}' not found")
+        order.update_status(OrderStatus.PAID)
+        self.order_repository.save(order)
+
     async def confirm_order(self, order_id: int) -> OrderEntity:
         order = self.get_order_by_id(order_id)
         if order.status != OrderStatus.PENDING:
@@ -604,6 +658,21 @@ class OrderService:
 def on_startup():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    order_repository = SQLAlchemyOrderRepository(db)
+    customer_repository = SQLAlchemyCustomerRepository(db)
+    inventory_publisher = get_inventory_publisher()
+    order_update_publisher = get_order_update_publisher()
+    order_service = OrderService(
+        order_repository,
+        customer_repository,
+        inventory_publisher,
+        order_update_publisher,
+    )
+
+    payment_subscriber = PaymentSubscriber(order_service)
+    threading.Thread(target=payment_subscriber.start_consuming).start()
 
 
 def get_db():
