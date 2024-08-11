@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import threading
+import time
 from enum import Enum
 from typing import List, Optional
 
@@ -254,10 +255,35 @@ class MongoDBPaymentRepository(PaymentRepository):
 
 # Publisher Adapter using Pika
 class PaymentPublisher:
-    def __init__(self, connection_params):
-        self.connection = pika.BlockingConnection(connection_params)
-        self.channel = self.connection.channel()
+    def __init__(self, connection_params, max_retries=5, delay=5):
+        self.connection_params = connection_params
+        self.max_retries = max_retries
+        self.delay = delay
+        self.connection = None
+        self.channel = None
         self.exchange_name = "payment_exchange"
+        self.connect()
+
+    def connect(self):
+        attempts = 0
+        while attempts < self.max_retries:
+            try:
+                self.connection = pika.BlockingConnection(
+                    self.connection_params
+                )
+                self.channel = self.connection.channel()
+                return
+            except pika.exceptions.AMQPConnectionError as e:
+                attempts += 1
+                logger.error(
+                    f"Attempt {attempts}/{self.max_retries} to connect to RabbitMQ failed: {str(e)}"
+                )
+                time.sleep(self.delay)
+
+        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
+        raise pika.exceptions.AMQPConnectionError(
+            "Failed to connect to RabbitMQ after multiple attempts."
+        )
 
     def publish_payment_update(
         self, payment_id: str, order_id: int, status: str
@@ -269,23 +295,59 @@ class PaymentPublisher:
                 "status": status,
             }
         )
-        self.channel.basic_publish(
-            exchange=self.exchange_name,
-            routing_key="payment_queue",
-            body=message,
-        )
-        logger.info(f"Published payment update: {message} to payment_queue")
+        try:
+            self.channel.basic_publish(
+                exchange=self.exchange_name,
+                routing_key="payment_queue",
+                body=message,
+            )
+            logger.info(
+                f"Published payment update: {message} to payment_queue"
+            )
+        except pika.exceptions.ConnectionClosed:
+            logger.error("Connection closed, attempting to reconnect.")
+            self.connect()
+            self.publish_payment_update(payment_id, order_id, status)
 
 
 # Subscriber Adapter using Pika
 class OrderSubscriber:
-    def __init__(self, payment_service: PaymentService):
+
+    def __init__(
+        self,
+        payment_service: PaymentService,
+        max_retries: int = 5,
+        delay: int = 5,
+    ):
         self.payment_service = payment_service
         self.connection_params = pika.ConnectionParameters(host="rabbitmq")
-        self.connection = pika.BlockingConnection(self.connection_params)
-        self.channel = self.connection.channel()
+        self.max_retries = max_retries
+        self.delay = delay
+
+    def connect(self):
+        attempts = 0
+        while attempts < self.max_retries:
+            try:
+                self.connection = pika.BlockingConnection(
+                    self.connection_params
+                )
+                self.channel = self.connection.channel()
+                return True
+            except pika.exceptions.AMQPConnectionError as e:
+                attempts += 1
+                logger.error(
+                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
+                )
+                time.sleep(self.delay)
+
+        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
+        return False
 
     def start_consuming(self):
+        if not self.connect():
+            logger.error("Failed to start consuming. Exiting.")
+            return
+
         self.channel.exchange_declare(
             exchange="orders_exchange", exchange_type="topic", durable=True
         )

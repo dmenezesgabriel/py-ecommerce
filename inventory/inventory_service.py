@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import threading
+import time
 from typing import List, Optional
 
 import pika
@@ -481,13 +482,41 @@ class SQLAlchemyCategoryRepository(CategoryRepository):
 
 # Subscriber Adapter using Pika
 class InventorySubscriber:
-    def __init__(self, product_service: ProductService):
+    def __init__(
+        self,
+        product_service: ProductService,
+        max_retries: int = 5,
+        delay: int = 5,
+    ):
         self.product_service = product_service
         self.connection_params = pika.ConnectionParameters(host="rabbitmq")
-        self.connection = pika.BlockingConnection(self.connection_params)
-        self.channel = self.connection.channel()
+        self.max_retries = max_retries
+        self.delay = delay
+
+    def connect(self):
+        attempts = 0
+        while attempts < self.max_retries:
+            try:
+                self.connection = pika.BlockingConnection(
+                    self.connection_params
+                )
+                self.channel = self.connection.channel()
+                return True
+            except pika.exceptions.AMQPConnectionError as e:
+                attempts += 1
+                logger.error(
+                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
+                )
+                time.sleep(self.delay)
+
+        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
+        return False
 
     def start_consuming(self):
+        if not self.connect():
+            logger.error("Failed to start consuming. Exiting.")
+            return
+
         self.channel.exchange_declare(
             exchange="inventory_exchange", exchange_type="direct", durable=True
         )

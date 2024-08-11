@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import threading
+import time
 import uuid
 from enum import Enum as PyEnum
 from typing import List, Optional
@@ -355,10 +356,35 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
 
 # Publisher Adapter using Pika
 class InventoryPublisher:
-    def __init__(self, connection_params):
-        self.connection = pika.BlockingConnection(connection_params)
-        self.channel = self.connection.channel()
+    def __init__(self, connection_params, max_retries=5, delay=5):
+        self.connection_params = connection_params
+        self.max_retries = max_retries
+        self.delay = delay
+        self.connection = None
+        self.channel = None
         self.exchange_name = "inventory_exchange"
+        self.connect()
+
+    def connect(self):
+        attempts = 0
+        while attempts < self.max_retries:
+            try:
+                self.connection = pika.BlockingConnection(
+                    self.connection_params
+                )
+                self.channel = self.connection.channel()
+                return
+            except pika.exceptions.AMQPConnectionError as e:
+                attempts += 1
+                logger.error(
+                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
+                )
+                time.sleep(self.delay)
+
+        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
+        raise pika.exceptions.AMQPConnectionError(
+            "Failed to connect to RabbitMQ after multiple attempts."
+        )
 
     def publish_inventory_update(self, sku: str, action: str, quantity: int):
         message = json.dumps(
@@ -368,18 +394,49 @@ class InventoryPublisher:
                 "quantity": quantity,
             }
         )
-        self.channel.basic_publish(
-            exchange=self.exchange_name,
-            routing_key="inventory_queue",
-            body=message,
-        )
+        try:
+            self.channel.basic_publish(
+                exchange=self.exchange_name,
+                routing_key="inventory_queue",
+                body=message,
+            )
+            logger.info(f"Published inventory update: {message}")
+        except pika.exceptions.ConnectionClosed:
+            logger.error("Connection closed, attempting to reconnect.")
+            self.connect()
+            self.publish_inventory_update(sku, action, quantity)
 
 
 class OrderUpdatePublisher:
-    def __init__(self, connection_params):
-        self.connection = pika.BlockingConnection(connection_params)
-        self.channel = self.connection.channel()
+    def __init__(self, connection_params, max_retries=5, delay=5):
+        self.connection_params = connection_params
+        self.max_retries = max_retries
+        self.delay = delay
+        self.connection = None
+        self.channel = None
         self.exchange_name = "orders_exchange"
+        self.connect()
+
+    def connect(self):
+        attempts = 0
+        while attempts < self.max_retries:
+            try:
+                self.connection = pika.BlockingConnection(
+                    self.connection_params
+                )
+                self.channel = self.connection.channel()
+                return
+            except pika.exceptions.AMQPConnectionError as e:
+                attempts += 1
+                logger.error(
+                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
+                )
+                time.sleep(self.delay)
+
+        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
+        raise pika.exceptions.AMQPConnectionError(
+            "Failed to connect to RabbitMQ after multiple attempts."
+        )
 
     def publish_order_update(self, order_id: int, amount: float, status: str):
         message = json.dumps(
@@ -389,23 +446,57 @@ class OrderUpdatePublisher:
                 "status": status,
             }
         )
-        self.channel.basic_publish(
-            exchange=self.exchange_name,
-            routing_key="orders_queue",
-            body=message,
-        )
-        logger.info(f"Published order update: {message} to orders_queue")
+        try:
+            self.channel.basic_publish(
+                exchange=self.exchange_name,
+                routing_key="orders_queue",
+                body=message,
+            )
+            logger.info(f"Published order update: {message} to orders_queue")
+        except pika.exceptions.ConnectionClosed:
+            logger.error("Connection closed, attempting to reconnect.")
+            self.connect()
+            self.publish_order_update(order_id, amount, status)
 
 
 # Subscriber Adapter using Pika
 class PaymentSubscriber:
-    def __init__(self, order_service: "OrderService"):
+
+    def __init__(
+        self,
+        order_service: "OrderService",
+        max_retries: int = 5,
+        delay: int = 5,
+    ):
         self.order_service = order_service
         self.connection_params = pika.ConnectionParameters(host="rabbitmq")
-        self.connection = pika.BlockingConnection(self.connection_params)
-        self.channel = self.connection.channel()
+        self.max_retries = max_retries
+        self.delay = delay
+
+    def connect(self):
+        attempts = 0
+        while attempts < self.max_retries:
+            try:
+                self.connection = pika.BlockingConnection(
+                    self.connection_params
+                )
+                self.channel = self.connection.channel()
+                return True
+            except pika.exceptions.AMQPConnectionError as e:
+                attempts += 1
+                logger.error(
+                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
+                )
+                time.sleep(self.delay)
+
+        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
+        return False
 
     def start_consuming(self):
+        if not self.connect():
+            logger.error("Failed to start consuming. Exiting.")
+            return
+
         self.channel.exchange_declare(
             exchange="payment_exchange", exchange_type="topic", durable=True
         )
