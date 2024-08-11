@@ -317,6 +317,8 @@ class OrderSubscriber:
                 payment = self.payment_service.get_payment_by_order_id(
                     order_id
                 )
+                if payment.status in ["failed", "refunded", "canceled"]:
+                    return
                 self.payment_service.cancel_payment(payment.id)
                 logger.info(f"Canceled payment for order ID: {order_id}.")
 

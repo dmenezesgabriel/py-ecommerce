@@ -435,6 +435,9 @@ class PaymentSubscriber:
             if status == "completed":
                 self.order_service.set_paid_order(order_id)
                 logger.info(f"Order ID {order_id} marked as paid.")
+            if status in ["refunded", "canceled"]:
+                self.order_service.cancel_order(order_id)
+                logger.info(f"Order ID {order_id} marked as canceled.")
         except Exception as e:
             logger.error(f"Error processing message: {e}")
         finally:
@@ -603,7 +606,7 @@ class OrderService:
             raise e
         return order
 
-    async def cancel_order(self, order_id: int) -> OrderEntity:
+    def cancel_order(self, order_id: int) -> OrderEntity:
         order = self.get_order_by_id(order_id)
         if order.status not in [OrderStatus.PENDING, OrderStatus.CONFIRMED]:
             raise InvalidEntity(
@@ -896,7 +899,7 @@ async def cancel_order(
     order_id: int, service: OrderService = Depends(get_order_service)
 ):
     try:
-        canceled_order = await service.cancel_order(order_id)
+        canceled_order = service.cancel_order(order_id)
         total_amount = await service.calculate_order_total(canceled_order)
         return serialize_order(canceled_order, total_amount)
     except (EntityNotFound, InvalidEntity) as e:
