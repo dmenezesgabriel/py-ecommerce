@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import Column, Enum, ForeignKey, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
+from sqlalchemy.sql import text  # Import the text function
 
 app = FastAPI()
 
@@ -826,6 +827,40 @@ class OrderService:
         return total_amount
 
 
+class HealthService:
+    def __init__(self, db: Session, rabbitmq_host: str):
+        self.db = db
+        self.rabbitmq_host = rabbitmq_host
+
+    def check_database(self) -> bool:
+        try:
+            # Use text() to create a textual SQL expression
+            self.db.execute(text("SELECT 1"))
+            return True
+        except Exception as e:
+            logger.error(f"Database health check failed: {e}")
+            return False
+
+    def check_rabbitmq(self) -> bool:
+        try:
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters(host=self.rabbitmq_host)
+            )
+            connection.close()
+            return True
+        except Exception as e:
+            logger.error(f"RabbitMQ health check failed: {e}")
+            return False
+
+    def get_health_status(self) -> dict:
+        db_status = self.check_database()
+        rabbitmq_status = self.check_rabbitmq()
+        return {
+            "database": "healthy" if db_status else "unhealthy",
+            "rabbitmq": "healthy" if rabbitmq_status else "unhealthy",
+        }
+
+
 # FastAPI Routes (Adapter)
 @app.on_event("startup")
 def on_startup():
@@ -856,6 +891,12 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def get_health_service(
+    db: Session = Depends(get_db),
+) -> HealthService:
+    return HealthService(db, rabbitmq_host="rabbitmq")
 
 
 def get_inventory_publisher() -> InventoryPublisher:
@@ -1138,6 +1179,11 @@ async def delete_customer(
     if not customer_entity:
         raise HTTPException(status_code=404, detail="Customer not found")
     service.customer_repository.delete(customer_entity)
+
+
+@app.get("/health", tags=["Health"])
+def health_check(health_service: HealthService = Depends(get_health_service)):
+    return health_service.get_health_status()
 
 
 # Serialization Functions

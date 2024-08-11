@@ -11,6 +11,7 @@ from bson.objectid import ObjectId
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from pymongo import MongoClient
+from pymongo.errors import ServerSelectionTimeoutError
 
 app = FastAPI()
 
@@ -196,6 +197,40 @@ class PaymentService:
 
         self.payment_repository.delete(payment)
         return payment
+
+
+class HealthService:
+    def __init__(self, db, rabbitmq_host: str):
+        self.db = db
+        self.rabbitmq_host = rabbitmq_host
+
+    def check_mongodb(self) -> bool:
+        try:
+            # Perform a simple MongoDB command to check connection
+            self.db.command("ping")
+            return True
+        except ServerSelectionTimeoutError as e:
+            logger.error(f"MongoDB health check failed: {e}")
+            return False
+
+    def check_rabbitmq(self) -> bool:
+        try:
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters(host=self.rabbitmq_host)
+            )
+            connection.close()
+            return True
+        except Exception as e:
+            logger.error(f"RabbitMQ health check failed: {e}")
+            return False
+
+    def get_health_status(self) -> dict:
+        mongodb_status = self.check_mongodb()
+        rabbitmq_status = self.check_rabbitmq()
+        return {
+            "mongodb": "healthy" if mongodb_status else "unhealthy",
+            "rabbitmq": "healthy" if rabbitmq_status else "unhealthy",
+        }
 
 
 # Ports (Interfaces)
@@ -422,6 +457,10 @@ def get_payment_publisher() -> PaymentPublisher:
     return PaymentPublisher(connection_params)
 
 
+def get_health_service() -> HealthService:
+    return HealthService(db, rabbitmq_host="rabbitmq")
+
+
 # Pydantic Models for API
 class PaymentStatus(str, Enum):
     PENDING = "pending"
@@ -622,6 +661,11 @@ def delete_payment(
         return {"detail": "Payment deleted"}
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/health", tags=["Health"])
+def health_check(health_service: HealthService = Depends(get_health_service)):
+    return health_service.get_health_status()
 
 
 # Serialization Function
