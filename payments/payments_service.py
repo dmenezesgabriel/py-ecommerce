@@ -51,6 +51,10 @@ class EntityAlreadyExists(Exception):
     pass
 
 
+class InvalidAction(Exception):
+    pass
+
+
 # Entities
 class PaymentEntity:
     def __init__(
@@ -111,6 +115,9 @@ class PaymentService:
         if not payment:
             raise EntityNotFound(f"Payment with ID '{payment_id}' not found")
 
+        if payment.status == PaymentStatus.CANCELED.value:
+            raise InvalidAction("Cannot modify a canceled payment")
+
         payment.order_id = order_id
         payment.amount = amount
         payment.status = status
@@ -124,7 +131,52 @@ class PaymentService:
         if not payment:
             raise EntityNotFound(f"Payment with ID '{payment_id}' not found")
 
+        if payment.status == PaymentStatus.CANCELED.value:
+            raise InvalidAction(
+                "Cannot change the status of a canceled payment"
+            )
+
+        if (
+            status
+            in [
+                PaymentStatus.COMPLETED.value,
+                PaymentStatus.FAILED.value,
+                PaymentStatus.REFUNDED.value,
+            ]
+            and payment.status == PaymentStatus.CANCELED.value
+        ):
+            raise InvalidAction(
+                f"Cannot {status.lower()} a payment that has been canceled"
+            )
+
         payment.update_status(status)
+        self.payment_repository.save(payment)
+
+        # Publish the status update
+        self.payment_publisher.publish_payment_update(
+            payment_id=payment.id,
+            order_id=payment.order_id,
+            status=payment.status,
+        )
+
+        return payment
+
+    def cancel_payment(self, payment_id: str) -> PaymentEntity:
+        payment = self.payment_repository.find_by_id(payment_id)
+        if not payment:
+            raise EntityNotFound(f"Payment with ID '{payment_id}' not found")
+
+        if payment.status in [
+            PaymentStatus.COMPLETED.value,
+            PaymentStatus.FAILED.value,
+            PaymentStatus.REFUNDED.value,
+            PaymentStatus.CANCELED.value,
+        ]:
+            raise InvalidAction(
+                "Cannot cancel a payment that has been completed, failed, refunded, or already canceled"
+            )
+
+        payment.update_status(PaymentStatus.CANCELED.value)
         self.payment_repository.save(payment)
 
         # Publish the status update
@@ -258,8 +310,15 @@ class OrderSubscriber:
         try:
             data = json.loads(body.decode("utf-8"))
             order_id = data.get("order_id")
-            amount = data.get("amount")
             status = data.get("status")
+            amount = data.get("amount")
+
+            if status == "canceled":
+                payment = self.payment_service.get_payment_by_order_id(
+                    order_id
+                )
+                self.payment_service.cancel_payment(payment.id)
+                logger.info(f"Canceled payment for order ID: {order_id}.")
 
             if status == "confirmed":
                 self.payment_service.create_payment(
@@ -305,6 +364,7 @@ class PaymentStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     REFUNDED = "refunded"
+    CANCELED = "canceled"
 
 
 class PaymentCreate(BaseModel):
@@ -406,6 +466,8 @@ def update_payment(
         return serialize_payment(updated_payment)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidAction as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put("/payments/{payment_id}/status", response_model=PaymentResponse)
@@ -421,6 +483,8 @@ def update_payment_status(
         return serialize_payment(updated_payment)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidAction as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put("/payments/{payment_id}/complete", response_model=PaymentResponse)
@@ -435,6 +499,8 @@ def complete_payment(
         return serialize_payment(updated_payment)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidAction as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put("/payments/{payment_id}/fail", response_model=PaymentResponse)
@@ -449,6 +515,8 @@ def fail_payment(
         return serialize_payment(updated_payment)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidAction as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put("/payments/{payment_id}/refund", response_model=PaymentResponse)
@@ -463,6 +531,22 @@ def refund_payment(
         return serialize_payment(updated_payment)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidAction as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/payments/{payment_id}/cancel", response_model=PaymentResponse)
+def cancel_payment(
+    payment_id: str,
+    service: PaymentService = Depends(get_payment_service),
+):
+    try:
+        canceled_payment = service.cancel_payment(payment_id)
+        return serialize_payment(canceled_payment)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except InvalidAction as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.delete("/payments/{payment_id}")
