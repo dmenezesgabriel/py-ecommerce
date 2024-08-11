@@ -1,7 +1,12 @@
+import json
+import logging
 import os
+import threading
+import time
 from enum import Enum
 from typing import List, Optional
 
+import pika
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import Column
@@ -23,6 +28,18 @@ if not os.path.exists("./data"):
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Set up logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 
 # Custom Exceptions
@@ -323,15 +340,74 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
         return None
 
 
+# Publisher Adapter using Pika
+class DeliveryPublisher:
+    def __init__(self, connection_params, max_retries=5, delay=5):
+        self.connection_params = connection_params
+        self.max_retries = max_retries
+        self.delay = delay
+        self.connection = None
+        self.channel = None
+        self.exchange_name = "delivery_exchange"
+        self.connect()
+
+    def connect(self):
+        attempts = 0
+        while attempts < self.max_retries:
+            try:
+                self.connection = pika.BlockingConnection(
+                    self.connection_params
+                )
+                self.channel = self.connection.channel()
+                return
+            except pika.exceptions.AMQPConnectionError as e:
+                attempts += 1
+                logger.error(
+                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
+                )
+                time.sleep(self.delay)
+
+        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
+        raise pika.exceptions.AMQPConnectionError(
+            "Failed to connect to RabbitMQ after multiple attempts."
+        )
+
+    def publish_delivery_update(
+        self, delivery_id: int, order_id: int, status: str
+    ):
+        message = json.dumps(
+            {
+                "delivery_id": delivery_id,
+                "order_id": order_id,
+                "status": status,
+            }
+        )
+        try:
+            self.channel.basic_publish(
+                exchange=self.exchange_name,
+                routing_key="delivery_queue",
+                body=message,
+            )
+            logger.info(
+                f"Published delivery update: {message} to delivery_queue"
+            )
+        except pika.exceptions.ConnectionClosed:
+            logger.error("Connection closed, attempting to reconnect.")
+            self.connect()
+            self.publish_delivery_update(delivery_id, order_id, status)
+
+
 # Services
 class DeliveryService:
     def __init__(
         self,
         delivery_repository: DeliveryRepository,
         customer_repository: CustomerRepository,
+        delivery_publisher: DeliveryPublisher,
     ):
         self.delivery_repository = delivery_repository
         self.customer_repository = customer_repository
+        self.delivery_publisher = delivery_publisher
 
     def create_delivery(
         self,
@@ -418,6 +494,14 @@ class DeliveryService:
 
         delivery.update_status(status)
         self.delivery_repository.save(delivery)
+
+        # Publish the delivery status update
+        self.delivery_publisher.publish_delivery_update(
+            delivery_id=delivery.id,
+            order_id=delivery.order_id,
+            status=delivery.status.value,
+        )
+
         return delivery
 
     def delete_delivery(self, delivery_id: int) -> DeliveryEntity:
@@ -447,10 +531,17 @@ def get_db():
         db.close()
 
 
-def get_delivery_service(db: Session = Depends(get_db)) -> DeliveryService:
+def get_delivery_service(
+    db: Session = Depends(get_db),
+    delivery_publisher: DeliveryPublisher = Depends(
+        lambda: DeliveryPublisher(pika.ConnectionParameters(host="rabbitmq"))
+    ),
+) -> DeliveryService:
     delivery_repository = SQLAlchemyDeliveryRepository(db)
     customer_repository = SQLAlchemyCustomerRepository(db)
-    return DeliveryService(delivery_repository, customer_repository)
+    return DeliveryService(
+        delivery_repository, customer_repository, delivery_publisher
+    )
 
 
 # Pydantic Models for API
@@ -604,6 +695,49 @@ def update_delivery_status(
     try:
         updated_delivery = service.update_delivery_status(
             delivery_id, status_update.status
+        )
+        return serialize_delivery(updated_delivery)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.put(
+    "/deliveries/{delivery_id}/delivered", response_model=DeliveryResponse
+)
+def set_delivery_delivered(
+    delivery_id: int, service: DeliveryService = Depends(get_delivery_service)
+):
+    try:
+        updated_delivery = service.update_delivery_status(
+            delivery_id, DeliveryStatus.DELIVERED
+        )
+        return serialize_delivery(updated_delivery)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.put(
+    "/deliveries/{delivery_id}/in-transit", response_model=DeliveryResponse
+)
+def set_delivery_in_transit(
+    delivery_id: int, service: DeliveryService = Depends(get_delivery_service)
+):
+    try:
+        updated_delivery = service.update_delivery_status(
+            delivery_id, DeliveryStatus.IN_TRANSIT
+        )
+        return serialize_delivery(updated_delivery)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.put("/deliveries/{delivery_id}/cancel", response_model=DeliveryResponse)
+def cancel_delivery(
+    delivery_id: int, service: DeliveryService = Depends(get_delivery_service)
+):
+    try:
+        updated_delivery = service.update_delivery_status(
+            delivery_id, DeliveryStatus.CANCELED
         )
         return serialize_delivery(updated_delivery)
     except EntityNotFound as e:
