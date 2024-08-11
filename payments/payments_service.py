@@ -71,8 +71,9 @@ class PaymentEntity:
 
 # Services
 class PaymentService:
-    def __init__(self, payment_repository):
+    def __init__(self, payment_repository, payment_publisher):
         self.payment_repository = payment_repository
+        self.payment_publisher = payment_publisher
 
     def create_payment(
         self, order_id: int, amount: float, status: str
@@ -125,6 +126,14 @@ class PaymentService:
 
         payment.update_status(status)
         self.payment_repository.save(payment)
+
+        # Publish the status update
+        self.payment_publisher.publish_payment_update(
+            payment_id=payment.id,
+            order_id=payment.order_id,
+            status=payment.status,
+        )
+
         return payment
 
     def delete_payment(self, payment_id: str):
@@ -189,6 +198,31 @@ class MongoDBPaymentRepository(PaymentRepository):
 
     def delete(self, payment: PaymentEntity):
         self.db.delete_one({"_id": ObjectId(payment.id)})
+
+
+# Publisher Adapter using Pika
+class PaymentPublisher:
+    def __init__(self, connection_params):
+        self.connection = pika.BlockingConnection(connection_params)
+        self.channel = self.connection.channel()
+        self.exchange_name = "payment_exchange"
+
+    def publish_payment_update(
+        self, payment_id: str, order_id: int, status: str
+    ):
+        message = json.dumps(
+            {
+                "payment_id": payment_id,
+                "order_id": order_id,
+                "status": status,
+            }
+        )
+        self.channel.basic_publish(
+            exchange=self.exchange_name,
+            routing_key="payment_queue",
+            body=message,
+        )
+        logger.info(f"Published payment update: {message} to payment_queue")
 
 
 # Subscriber Adapter using Pika
@@ -256,7 +290,13 @@ def on_startup():
 
 def get_payment_service() -> PaymentService:
     payment_repository = MongoDBPaymentRepository(payments_collection)
-    return PaymentService(payment_repository)
+    payment_publisher = get_payment_publisher()
+    return PaymentService(payment_repository, payment_publisher)
+
+
+def get_payment_publisher() -> PaymentPublisher:
+    connection_params = pika.ConnectionParameters(host="rabbitmq")
+    return PaymentPublisher(connection_params)
 
 
 # Pydantic Models for API
@@ -377,6 +417,48 @@ def update_payment_status(
     try:
         updated_payment = service.update_payment_status(
             payment_id, status_update.status
+        )
+        return serialize_payment(updated_payment)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.put("/payments/{payment_id}/complete", response_model=PaymentResponse)
+def complete_payment(
+    payment_id: str,
+    service: PaymentService = Depends(get_payment_service),
+):
+    try:
+        updated_payment = service.update_payment_status(
+            payment_id, PaymentStatus.COMPLETED.value
+        )
+        return serialize_payment(updated_payment)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.put("/payments/{payment_id}/fail", response_model=PaymentResponse)
+def fail_payment(
+    payment_id: str,
+    service: PaymentService = Depends(get_payment_service),
+):
+    try:
+        updated_payment = service.update_payment_status(
+            payment_id, PaymentStatus.FAILED.value
+        )
+        return serialize_payment(updated_payment)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.put("/payments/{payment_id}/refund", response_model=PaymentResponse)
+def refund_payment(
+    payment_id: str,
+    service: PaymentService = Depends(get_payment_service),
+):
+    try:
+        updated_payment = service.update_payment_status(
+            payment_id, PaymentStatus.REFUNDED.value
         )
         return serialize_payment(updated_payment)
     except EntityNotFound as e:
