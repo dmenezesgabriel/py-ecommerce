@@ -6,6 +6,7 @@ import time
 from enum import Enum
 from typing import List, Optional
 
+import aiohttp
 import pika
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
@@ -48,6 +49,10 @@ class EntityNotFound(Exception):
 
 
 class EntityAlreadyExists(Exception):
+    pass
+
+
+class InvalidOperation(Exception):
     pass
 
 
@@ -397,6 +402,23 @@ class DeliveryPublisher:
             self.publish_delivery_update(delivery_id, order_id, status)
 
 
+# Service for Order Verification using aiohttp
+class OrderVerificationService:
+    async def verify_order(self, order_id: int) -> bool:
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(
+                    f"http://orders_service:8002/orders/{order_id}"
+                ) as response:
+                    if response.status == 200:
+                        order = await response.json()
+                        if order["status"] not in ["canceled"]:
+                            return True
+            except Exception as e:
+                logger.error(f"Error verifying order {order_id}: {e}")
+            return False
+
+
 # Services
 class DeliveryService:
     def __init__(
@@ -404,12 +426,14 @@ class DeliveryService:
         delivery_repository: DeliveryRepository,
         customer_repository: CustomerRepository,
         delivery_publisher: DeliveryPublisher,
+        order_verification_service: OrderVerificationService,
     ):
         self.delivery_repository = delivery_repository
         self.customer_repository = customer_repository
         self.delivery_publisher = delivery_publisher
+        self.order_verification_service = order_verification_service
 
-    def create_delivery(
+    async def create_delivery(
         self,
         order_id: int,
         delivery_address: str,
@@ -418,6 +442,14 @@ class DeliveryService:
         customer: CustomerEntity,
         address: AddressEntity,
     ) -> DeliveryEntity:
+        order_exists = await self.order_verification_service.verify_order(
+            order_id
+        )
+        if not order_exists:
+            raise InvalidOperation(
+                f"Order with ID '{order_id}' does not exist or is canceled"
+            )
+
         existing_customer = self.customer_repository.find_by_email(
             customer.email
         )
@@ -444,7 +476,15 @@ class DeliveryService:
             raise EntityNotFound(f"Delivery with ID '{delivery_id}' not found")
         return delivery
 
-    def get_delivery_by_order_id(self, order_id: int) -> DeliveryEntity:
+    async def get_delivery_by_order_id(self, order_id: int) -> DeliveryEntity:
+        order_exists = await self.order_verification_service.verify_order(
+            order_id
+        )
+        if not order_exists:
+            raise InvalidOperation(
+                f"Order with ID '{order_id}' does not exist or is canceled"
+            )
+
         delivery = self.delivery_repository.find_by_order_id(order_id)
         if not delivery:
             raise EntityNotFound(
@@ -452,7 +492,7 @@ class DeliveryService:
             )
         return delivery
 
-    def update_delivery(
+    async def update_delivery(
         self,
         delivery_id: int,
         order_id: int,
@@ -462,6 +502,14 @@ class DeliveryService:
         customer: CustomerEntity,
         address: AddressEntity,
     ) -> DeliveryEntity:
+        order_exists = await self.order_verification_service.verify_order(
+            order_id
+        )
+        if not order_exists:
+            raise InvalidOperation(
+                f"Order with ID '{order_id}' does not exist or is canceled"
+            )
+
         delivery = self.delivery_repository.find_by_id(delivery_id)
         if not delivery:
             raise EntityNotFound(f"Delivery with ID '{delivery_id}' not found")
@@ -485,12 +533,20 @@ class DeliveryService:
         self.delivery_repository.save(delivery)
         return delivery
 
-    def update_delivery_status(
+    async def update_delivery_status(
         self, delivery_id: int, status: DeliveryStatus
     ) -> DeliveryEntity:
         delivery = self.delivery_repository.find_by_id(delivery_id)
         if not delivery:
             raise EntityNotFound(f"Delivery with ID '{delivery_id}' not found")
+
+        order_exists = await self.order_verification_service.verify_order(
+            delivery.order_id
+        )
+        if not order_exists:
+            raise InvalidOperation(
+                f"Order with ID '{delivery.order_id}' does not exist or is canceled"
+            )
 
         delivery.update_status(status)
         self.delivery_repository.save(delivery)
@@ -504,10 +560,18 @@ class DeliveryService:
 
         return delivery
 
-    def delete_delivery(self, delivery_id: int) -> DeliveryEntity:
+    async def delete_delivery(self, delivery_id: int) -> DeliveryEntity:
         delivery = self.delivery_repository.find_by_id(delivery_id)
         if not delivery:
             raise EntityNotFound(f"Delivery with ID '{delivery_id}' not found")
+
+        order_exists = await self.order_verification_service.verify_order(
+            delivery.order_id
+        )
+        if not order_exists:
+            raise InvalidOperation(
+                f"Order with ID '{delivery.order_id}' does not exist or is canceled"
+            )
 
         self.delivery_repository.delete(delivery)
         return delivery
@@ -536,11 +600,17 @@ def get_delivery_service(
     delivery_publisher: DeliveryPublisher = Depends(
         lambda: DeliveryPublisher(pika.ConnectionParameters(host="rabbitmq"))
     ),
+    order_verification_service: OrderVerificationService = Depends(
+        OrderVerificationService
+    ),
 ) -> DeliveryService:
     delivery_repository = SQLAlchemyDeliveryRepository(db)
     customer_repository = SQLAlchemyCustomerRepository(db)
     return DeliveryService(
-        delivery_repository, customer_repository, delivery_publisher
+        delivery_repository,
+        customer_repository,
+        delivery_publisher,
+        order_verification_service,
     )
 
 
@@ -604,7 +674,7 @@ class DeliveryResponse(BaseModel):
 
 
 @app.post("/deliveries/", response_model=DeliveryResponse)
-def create_delivery(
+async def create_delivery(
     delivery: DeliveryCreate,
     service: DeliveryService = Depends(get_delivery_service),
 ):
@@ -617,25 +687,30 @@ def create_delivery(
         country=delivery.address.country,
         zip_code=delivery.address.zip_code,
     )
-    created_delivery = service.create_delivery(
-        order_id=delivery.order_id,
-        delivery_address=delivery.delivery_address,
-        delivery_date=delivery.delivery_date,
-        status=delivery.status,
-        customer=customer_entity,
-        address=address_entity,
-    )
-    return serialize_delivery(created_delivery)
+    try:
+        created_delivery = await service.create_delivery(
+            order_id=delivery.order_id,
+            delivery_address=delivery.delivery_address,
+            delivery_date=delivery.delivery_date,
+            status=delivery.status,
+            customer=customer_entity,
+            address=address_entity,
+        )
+        return serialize_delivery(created_delivery)
+    except InvalidOperation as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/deliveries/", response_model=List[DeliveryResponse])
-def read_deliveries(service: DeliveryService = Depends(get_delivery_service)):
+async def read_deliveries(
+    service: DeliveryService = Depends(get_delivery_service),
+):
     deliveries = service.list_deliveries()
     return [serialize_delivery(delivery) for delivery in deliveries]
 
 
 @app.get("/deliveries/{delivery_id}", response_model=DeliveryResponse)
-def read_delivery(
+async def read_delivery(
     delivery_id: int, service: DeliveryService = Depends(get_delivery_service)
 ):
     try:
@@ -646,18 +721,20 @@ def read_delivery(
 
 
 @app.get("/deliveries/by-order-id/{order_id}", response_model=DeliveryResponse)
-def read_delivery_by_order_id(
+async def read_delivery_by_order_id(
     order_id: int, service: DeliveryService = Depends(get_delivery_service)
 ):
     try:
-        delivery = service.get_delivery_by_order_id(order_id)
+        delivery = await service.get_delivery_by_order_id(order_id)
         return serialize_delivery(delivery)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidOperation as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put("/deliveries/{delivery_id}", response_model=DeliveryResponse)
-def update_delivery(
+async def update_delivery(
     delivery_id: int,
     delivery: DeliveryCreate,
     service: DeliveryService = Depends(get_delivery_service),
@@ -672,7 +749,7 @@ def update_delivery(
         zip_code=delivery.address.zip_code,
     )
     try:
-        updated_delivery = service.update_delivery(
+        updated_delivery = await service.update_delivery(
             delivery_id=delivery_id,
             order_id=delivery.order_id,
             delivery_address=delivery.delivery_address,
@@ -684,75 +761,87 @@ def update_delivery(
         return serialize_delivery(updated_delivery)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidOperation as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put("/deliveries/{delivery_id}/status", response_model=DeliveryResponse)
-def update_delivery_status(
+async def update_delivery_status(
     delivery_id: int,
     status_update: DeliveryStatusUpdate,
     service: DeliveryService = Depends(get_delivery_service),
 ):
     try:
-        updated_delivery = service.update_delivery_status(
+        updated_delivery = await service.update_delivery_status(
             delivery_id, status_update.status
         )
         return serialize_delivery(updated_delivery)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidOperation as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put(
     "/deliveries/{delivery_id}/delivered", response_model=DeliveryResponse
 )
-def set_delivery_delivered(
+async def set_delivery_delivered(
     delivery_id: int, service: DeliveryService = Depends(get_delivery_service)
 ):
     try:
-        updated_delivery = service.update_delivery_status(
+        updated_delivery = await service.update_delivery_status(
             delivery_id, DeliveryStatus.DELIVERED
         )
         return serialize_delivery(updated_delivery)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidOperation as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put(
     "/deliveries/{delivery_id}/in-transit", response_model=DeliveryResponse
 )
-def set_delivery_in_transit(
+async def set_delivery_in_transit(
     delivery_id: int, service: DeliveryService = Depends(get_delivery_service)
 ):
     try:
-        updated_delivery = service.update_delivery_status(
+        updated_delivery = await service.update_delivery_status(
             delivery_id, DeliveryStatus.IN_TRANSIT
         )
         return serialize_delivery(updated_delivery)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidOperation as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put("/deliveries/{delivery_id}/cancel", response_model=DeliveryResponse)
-def cancel_delivery(
+async def cancel_delivery(
     delivery_id: int, service: DeliveryService = Depends(get_delivery_service)
 ):
     try:
-        updated_delivery = service.update_delivery_status(
+        updated_delivery = await service.update_delivery_status(
             delivery_id, DeliveryStatus.CANCELED
         )
         return serialize_delivery(updated_delivery)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidOperation as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.delete("/deliveries/{delivery_id}")
-def delete_delivery(
+async def delete_delivery(
     delivery_id: int, service: DeliveryService = Depends(get_delivery_service)
 ):
     try:
-        service.delete_delivery(delivery_id)
+        await service.delete_delivery(delivery_id)
         return {"message": "Delivery deleted successfully"}
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except InvalidOperation as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # Serialization Functions
