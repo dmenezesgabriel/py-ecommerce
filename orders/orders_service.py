@@ -535,6 +535,85 @@ class PaymentSubscriber:
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
+class DeliverySubscriber:
+
+    def __init__(
+        self,
+        order_service: "OrderService",
+        max_retries: int = 5,
+        delay: int = 5,
+    ):
+        self.order_service = order_service
+        self.connection_params = pika.ConnectionParameters(host="rabbitmq")
+        self.max_retries = max_retries
+        self.delay = delay
+
+    def connect(self):
+        attempts = 0
+        while attempts < self.max_retries:
+            try:
+                self.connection = pika.BlockingConnection(
+                    self.connection_params
+                )
+                self.channel = self.connection.channel()
+                return True
+            except pika.exceptions.AMQPConnectionError as e:
+                attempts += 1
+                logger.error(
+                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
+                )
+                time.sleep(self.delay)
+
+        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
+        return False
+
+    def start_consuming(self):
+        if not self.connect():
+            logger.error("Failed to start consuming. Exiting.")
+            return
+
+        self.channel.exchange_declare(
+            exchange="delivery_exchange", exchange_type="topic", durable=True
+        )
+        self.channel.queue_declare(queue="delivery_queue", durable=True)
+        self.channel.queue_bind(
+            exchange="delivery_exchange",
+            queue="delivery_queue",
+            routing_key="delivery_queue",
+        )
+
+        self.channel.basic_consume(
+            queue="delivery_queue",
+            on_message_callback=self.on_message,
+            auto_ack=False,
+        )
+
+        logger.info("Starting to consume messages from delivery_queue.")
+        self.channel.start_consuming()
+
+    def on_message(self, ch, method, properties, body):
+        logger.info(f"Received message from delivery_queue: {body}")
+        try:
+            data = json.loads(body.decode("utf-8"))
+            order_id = data.get("order_id")
+            status = data.get("status")
+
+            if status == "in_transit":
+                self.order_service.update_order_status(
+                    order_id, OrderStatus.SHIPPED
+                )
+                logger.info(f"Order ID {order_id} marked as shipped.")
+            if status == "delivered":
+                self.order_service.update_order_status(
+                    order_id, OrderStatus.DELIVERED
+                )
+                logger.info(f"Order ID {order_id} marked as delivered.")
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+        finally:
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+
+
 # Services
 class OrderService:
     def __init__(
@@ -766,7 +845,9 @@ def on_startup():
     )
 
     payment_subscriber = PaymentSubscriber(order_service)
+    delivery_subscriber = DeliverySubscriber(order_service)
     threading.Thread(target=payment_subscriber.start_consuming).start()
+    threading.Thread(target=delivery_subscriber.start_consuming).start()
 
 
 def get_db():
