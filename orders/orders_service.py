@@ -342,7 +342,7 @@ class InventoryPublisher:
 
     def publish_inventory_update(self, sku: str, action: str, quantity: int):
         message = json.dumps(
-            {  # Properly encode the message as a JSON string with double quotes
+            {
                 "sku": sku,
                 "action": action,
                 "quantity": quantity,
@@ -351,7 +351,28 @@ class InventoryPublisher:
         self.channel.basic_publish(
             exchange=self.exchange_name,
             routing_key="inventory_queue",
-            body=message,  # Send the message as a properly formatted JSON string
+            body=message,
+        )
+
+
+class OrderUpdatePublisher:
+    def __init__(self, connection_params):
+        self.connection = pika.BlockingConnection(connection_params)
+        self.channel = self.connection.channel()
+        self.exchange_name = "orders_exchange"
+
+    def publish_order_update(self, order_id: int, amount: float, status: str):
+        message = json.dumps(
+            {
+                "order_id": order_id,
+                "amount": amount,
+                "status": status,
+            }
+        )
+        self.channel.basic_publish(
+            exchange=self.exchange_name,
+            routing_key="orders_queue",
+            body=message,
         )
 
 
@@ -362,10 +383,12 @@ class OrderService:
         order_repository: OrderRepository,
         customer_repository: CustomerRepository,
         inventory_publisher: InventoryPublisher,
+        order_update_publisher: OrderUpdatePublisher,
     ):
         self.order_repository = order_repository
         self.customer_repository = customer_repository
         self.inventory_publisher = inventory_publisher
+        self.order_update_publisher = order_update_publisher
 
     async def create_order(
         self, customer: CustomerEntity, order_items: List[OrderItemEntity]
@@ -387,7 +410,6 @@ class OrderService:
         try:
             total_amount = 0.0
             for item in order_items:
-                # Publish message to subtract inventory
                 self.inventory_publisher.publish_inventory_update(
                     item.product_sku, "subtract", item.quantity
                 )
@@ -396,7 +418,6 @@ class OrderService:
             return order, total_amount
 
         except Exception as e:
-            # Rollback inventory if there's any error
             for item in order_items:
                 self.inventory_publisher.publish_inventory_update(
                     item.product_sku, "add", item.quantity
@@ -436,11 +457,9 @@ class OrderService:
         else:
             customer.id = existing_customer.id
 
-        # Inventory adjustments to revert if needed
         inventory_changes = []
 
         try:
-            # Get current order items to compare
             current_order_items = {
                 item.product_sku: item.quantity for item in order.order_items
             }
@@ -475,7 +494,6 @@ class OrderService:
             return order, total_amount
 
         except Exception as e:
-            # Rollback inventory if there's any error
             for sku, quantity in inventory_changes:
                 action = "add" if quantity > 0 else "subtract"
                 self.inventory_publisher.publish_inventory_update(
@@ -501,6 +519,15 @@ class OrderService:
 
         order.update_status(OrderStatus.CONFIRMED)
         self.order_repository.save(order)
+        try:
+            total_amount = await calculate_order_total(order)
+            self.order_update_publisher.publish_order_update(
+                order_id=order.id,
+                amount=total_amount,
+                status=order.status.value,
+            )
+        except Exception as e:
+            raise e
         return order
 
     async def cancel_order(self, order_id: int) -> OrderEntity:
@@ -510,7 +537,6 @@ class OrderService:
                 "Only pending or confirmed orders can be canceled"
             )
 
-        # Revert inventory
         for item in order.order_items:
             self.inventory_publisher.publish_inventory_update(
                 item.product_sku, "add", item.quantity
@@ -518,6 +544,12 @@ class OrderService:
 
         order.update_status(OrderStatus.CANCELED)
         self.order_repository.save(order)
+        try:
+            self.order_update_publisher.publish_order_update(
+                order_id=order.id, amount=0.0, status=order.status.value
+            )
+        except Exception as e:
+            raise e
         return order
 
     def delete_order(self, order_id: int) -> OrderEntity:
@@ -552,14 +584,25 @@ def get_inventory_publisher() -> InventoryPublisher:
     return InventoryPublisher(connection_params)
 
 
+def get_order_update_publisher() -> OrderUpdatePublisher:
+    connection_params = pika.ConnectionParameters(host="rabbitmq")
+    return OrderUpdatePublisher(connection_params)
+
+
 def get_order_service(
     db: Session = Depends(get_db),
     inventory_publisher: InventoryPublisher = Depends(get_inventory_publisher),
+    order_update_publisher: OrderUpdatePublisher = Depends(
+        get_order_update_publisher
+    ),
 ) -> OrderService:
     order_repository = SQLAlchemyOrderRepository(db)
     customer_repository = SQLAlchemyCustomerRepository(db)
     return OrderService(
-        order_repository, customer_repository, inventory_publisher
+        order_repository,
+        customer_repository,
+        inventory_publisher,
+        order_update_publisher,
     )
 
 
