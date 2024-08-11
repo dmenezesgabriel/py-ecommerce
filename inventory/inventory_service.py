@@ -7,8 +7,14 @@ from typing import List, Optional
 import pika
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import (Column, Float, ForeignKey, Integer, String,
-                        create_engine)
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    create_engine,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
 
@@ -71,13 +77,8 @@ class InventoryEntity:
         self.id = id
         self.quantity = quantity
 
-    def add_quantity(self, amount: int):
-        self.quantity += amount
-
-    def subtract_quantity(self, amount: int):
-        if self.quantity < amount:
-            raise InvalidEntity("Not enough inventory to subtract")
-        self.quantity -= amount
+    def set_quantity(self, amount: int):
+        self.quantity = amount
 
 
 class ProductEntity:
@@ -97,11 +98,8 @@ class ProductEntity:
         self.price = price
         self.inventory = inventory
 
-    def add_inventory(self, quantity: int):
-        self.inventory.add_quantity(quantity)
-
-    def subtract_inventory(self, quantity: int):
-        self.inventory.subtract_quantity(quantity)
+    def set_inventory(self, quantity: int):
+        self.inventory.set_quantity(quantity)
 
     def set_price(self, amount: float):
         self.price.amount = amount
@@ -166,7 +164,7 @@ class ProductService:
         product.name = name
         product.category = category
         product.set_price(price)
-        product.add_inventory(quantity)
+        product.set_inventory(quantity)
         self.product_repository.save(product)
         return product
 
@@ -447,6 +445,7 @@ class SQLAlchemyCategoryRepository(CategoryRepository):
         self.db.add(db_category)
         self.db.commit()
         self.db.refresh(db_category)
+        category.id = db_category.id
 
     def find_by_name(self, name: str) -> Optional[CategoryEntity]:
         db_category = (
@@ -497,9 +496,7 @@ class InventorySubscriber:
     def on_message(self, ch, method, properties, body):
         logger.info(f"Received message from inventory_queue: {body}")
         try:
-            data = json.loads(
-                body.decode("utf-8")
-            )  # Decode the message as a JSON string
+            data = json.loads(body.decode("utf-8"))
             sku = data.get("sku")
             action = data.get("action")
             quantity = data.get("quantity")
@@ -555,7 +552,6 @@ class ProductCreate(BaseModel):
 
 
 class ProductUpdate(BaseModel):
-    sku: str
     name: str
     category_name: str
     price: float
