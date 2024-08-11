@@ -18,6 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
+from sqlalchemy.sql import text
 
 # Setup FastAPI
 app = FastAPI()
@@ -232,6 +233,40 @@ class ProductService:
 
     def list_categories(self) -> List[CategoryEntity]:
         return self.category_repository.list_all()
+
+
+class HealthService:
+    def __init__(self, db: Session, rabbitmq_host: str):
+        self.db = db
+        self.rabbitmq_host = rabbitmq_host
+
+    def check_database(self) -> bool:
+        try:
+            # Use text() to create a textual SQL expression
+            self.db.execute(text("SELECT 1"))
+            return True
+        except Exception as e:
+            logger.error(f"Database health check failed: {e}")
+            return False
+
+    def check_rabbitmq(self) -> bool:
+        try:
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters(host=self.rabbitmq_host)
+            )
+            connection.close()
+            return True
+        except Exception as e:
+            logger.error(f"RabbitMQ health check failed: {e}")
+            return False
+
+    def get_health_status(self) -> dict:
+        db_status = self.check_database()
+        rabbitmq_status = self.check_rabbitmq()
+        return {
+            "database": "healthy" if db_status else "unhealthy",
+            "rabbitmq": "healthy" if rabbitmq_status else "unhealthy",
+        }
 
 
 # Ports (Interfaces)
@@ -579,6 +614,10 @@ def get_db():
         db.close()
 
 
+def get_health_service(db: Session = Depends(get_db)) -> HealthService:
+    return HealthService(db, rabbitmq_host="rabbitmq")
+
+
 def get_product_service(db: Session = Depends(get_db)) -> ProductService:
     product_repository = SQLAlchemyProductRepository(db)
     category_repository = SQLAlchemyCategoryRepository(db)
@@ -763,3 +802,8 @@ def serialize_category(category: CategoryEntity) -> CategoryResponse:
         id=category.id,
         name=category.name,
     )
+
+
+@app.get("/health", tags=["Health"])
+def health_check(service: HealthService = Depends(get_health_service)):
+    return service.get_health_status()
