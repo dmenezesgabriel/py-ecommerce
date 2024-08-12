@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import threading
 import time
 from enum import Enum
 from typing import List, Optional
@@ -65,10 +66,17 @@ class DeliveryStatus(str, Enum):
 
 
 class CustomerEntity:
-    def __init__(self, name: str, email: str, id: Optional[int] = None):
+    def __init__(
+        self,
+        name: str,
+        email: str,
+        phone_number: Optional[str] = None,
+        id: Optional[int] = None,
+    ):
         self.id = id
         self.name = name
         self.email = email
+        self.phone_number = phone_number
 
 
 class AddressEntity:
@@ -135,6 +143,12 @@ class CustomerRepository:
     def find_by_email(self, email: str) -> Optional[CustomerEntity]:
         raise NotImplementedError
 
+    def list_all(self) -> List[CustomerEntity]:
+        raise NotImplementedError
+
+    def delete(self, customer: CustomerEntity):
+        raise NotImplementedError
+
 
 # Adapters
 class DeliveryModel(Base):
@@ -157,6 +171,8 @@ class CustomerModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     email = Column(String, unique=True, index=True)
+    phone_number = Column(String, nullable=True)
+    deleted = Column(Integer, default=0)  # Logical delete column
     deliveries = relationship("DeliveryModel", back_populates="customer")
 
 
@@ -184,7 +200,9 @@ class SQLAlchemyDeliveryRepository(DeliveryRepository):
         )
         if not customer_model:
             customer_model = CustomerModel(
-                name=delivery.customer.name, email=delivery.customer.email
+                name=delivery.customer.name,
+                email=delivery.customer.email,
+                phone_number=delivery.customer.phone_number,
             )
             self.db.add(customer_model)
             self.db.commit()
@@ -243,6 +261,7 @@ class SQLAlchemyDeliveryRepository(DeliveryRepository):
                     id=db_delivery.customer.id,
                     name=db_delivery.customer.name,
                     email=db_delivery.customer.email,
+                    phone_number=db_delivery.customer.phone_number,
                 ),
                 address=AddressEntity(
                     id=db_delivery.address.id,
@@ -271,6 +290,7 @@ class SQLAlchemyDeliveryRepository(DeliveryRepository):
                     id=db_delivery.customer.id,
                     name=db_delivery.customer.name,
                     email=db_delivery.customer.email,
+                    phone_number=db_delivery.customer.phone_number,
                 ),
                 address=AddressEntity(
                     id=db_delivery.address.id,
@@ -306,6 +326,7 @@ class SQLAlchemyDeliveryRepository(DeliveryRepository):
                     id=db_delivery.customer.id,
                     name=db_delivery.customer.name,
                     email=db_delivery.customer.email,
+                    phone_number=db_delivery.customer.phone_number,
                 ),
                 address=AddressEntity(
                     id=db_delivery.address.id,
@@ -324,8 +345,24 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
         self.db = db
 
     def save(self, customer: CustomerEntity):
-        db_customer = CustomerModel(name=customer.name, email=customer.email)
-        self.db.add(db_customer)
+        db_customer = (
+            self.db.query(CustomerModel)
+            .filter(CustomerModel.email == customer.email)
+            .first()
+        )
+
+        if not db_customer:
+            db_customer = CustomerModel(
+                name=customer.name,
+                email=customer.email,
+                phone_number=customer.phone_number,
+            )
+            self.db.add(db_customer)
+        else:
+            db_customer.name = customer.name
+            db_customer.email = customer.email
+            db_customer.phone_number = customer.phone_number
+
         self.db.commit()
         self.db.refresh(db_customer)
         customer.id = db_customer.id
@@ -333,7 +370,7 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
     def find_by_email(self, email: str) -> Optional[CustomerEntity]:
         db_customer = (
             self.db.query(CustomerModel)
-            .filter(CustomerModel.email == email)
+            .filter(CustomerModel.email == email, CustomerModel.deleted == 0)
             .first()
         )
         if db_customer:
@@ -341,8 +378,40 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
                 id=db_customer.id,
                 name=db_customer.name,
                 email=db_customer.email,
+                phone_number=db_customer.phone_number,
             )
         return None
+
+    def list_all(self) -> List[CustomerEntity]:
+        db_customers = (
+            self.db.query(CustomerModel)
+            .filter(CustomerModel.deleted == 0)
+            .all()
+        )
+        return [
+            CustomerEntity(
+                id=db_customer.id,
+                name=db_customer.name,
+                email=db_customer.email,
+                phone_number=db_customer.phone_number,
+            )
+            for db_customer in db_customers
+        ]
+
+    def delete(self, customer: CustomerEntity):
+        db_customer = (
+            self.db.query(CustomerModel)
+            .filter(CustomerModel.id == customer.id)
+            .first()
+        )
+
+        if db_customer:
+            db_customer.name = f"deleted_user_{db_customer.id}"
+            db_customer.email = f"deleted_email_{db_customer.id}@example.com"
+            db_customer.phone_number = f"deleted_phone_number_{db_customer.id}"
+
+            db_customer.deleted = 1
+            self.db.commit()
 
 
 # Publisher Adapter using Pika
@@ -579,6 +648,18 @@ class DeliveryService:
     def list_deliveries(self) -> List[DeliveryEntity]:
         return self.delivery_repository.list_all()
 
+    def get_customer_by_email(self, email: str) -> Optional[CustomerEntity]:
+        return self.customer_repository.find_by_email(email)
+
+    def list_customers(self) -> List[CustomerEntity]:
+        return self.customer_repository.list_all()
+
+    def save_customer(self, customer: CustomerEntity):
+        self.customer_repository.save(customer)
+
+    def delete_customer(self, customer: CustomerEntity):
+        self.customer_repository.delete(customer)
+
 
 class HealthService:
     def __init__(self, db: Session, rabbitmq_host: str):
@@ -665,6 +746,7 @@ class AddressCreate(BaseModel):
 class CustomerCreate(BaseModel):
     name: str
     email: str
+    phone_number: Optional[str] = None
 
 
 class DeliveryCreate(BaseModel):
@@ -695,6 +777,7 @@ class CustomerResponse(BaseModel):
     id: int
     name: str
     email: str
+    phone_number: Optional[str] = None
 
     class Config:
         orm_mode = True
@@ -719,7 +802,9 @@ async def create_delivery(
     service: DeliveryService = Depends(get_delivery_service),
 ):
     customer_entity = CustomerEntity(
-        name=delivery.customer.name, email=delivery.customer.email
+        name=delivery.customer.name,
+        email=delivery.customer.email,
+        phone_number=delivery.customer.phone_number,
     )
     address_entity = AddressEntity(
         city=delivery.address.city,
@@ -780,7 +865,9 @@ async def update_delivery(
     service: DeliveryService = Depends(get_delivery_service),
 ):
     customer_entity = CustomerEntity(
-        name=delivery.customer.name, email=delivery.customer.email
+        name=delivery.customer.name,
+        email=delivery.customer.email,
+        phone_number=delivery.customer.phone_number,
     )
     address_entity = AddressEntity(
         city=delivery.address.city,
@@ -884,6 +971,73 @@ async def delete_delivery(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.get(
+    "/customers/", tags=["Customer"], response_model=List[CustomerResponse]
+)
+async def read_customers(
+    service: DeliveryService = Depends(get_delivery_service),
+):
+    customers = service.list_customers()
+    return [serialize_customer(customer) for customer in customers]
+
+
+@app.get(
+    "/customers/{email}", tags=["Customer"], response_model=CustomerResponse
+)
+async def read_customer(
+    email: str, service: DeliveryService = Depends(get_delivery_service)
+):
+    customer = service.get_customer_by_email(email)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return serialize_customer(customer)
+
+
+@app.post("/customers/", tags=["Customer"], response_model=CustomerResponse)
+async def create_customer(
+    customer: CustomerCreate,
+    service: DeliveryService = Depends(get_delivery_service),
+):
+    customer_entity = CustomerEntity(
+        name=customer.name,
+        email=customer.email,
+        phone_number=customer.phone_number,
+    )
+    service.save_customer(customer_entity)
+    return serialize_customer(customer_entity)
+
+
+@app.put(
+    "/customers/{email}",
+    tags=["Customer"],
+    response_model=CustomerResponse,
+)
+async def update_customer(
+    email: str,
+    customer: CustomerCreate,
+    service: DeliveryService = Depends(get_delivery_service),
+):
+    customer_entity = service.get_customer_by_email(email)
+    if not customer_entity:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    customer_entity.name = customer.name
+    customer_entity.email = customer.email
+    customer_entity.phone_number = customer.phone_number
+    service.save_customer(customer_entity)
+    return serialize_customer(customer_entity)
+
+
+@app.delete("/customers/", tags=["Customer"], status_code=204)
+async def delete_customer(
+    email: str, service: DeliveryService = Depends(get_delivery_service)
+):
+    customer_entity = service.get_customer_by_email(email)
+    if not customer_entity:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    service.delete_customer(customer_entity)
+    return {"message": "Customer deleted successfully"}
+
+
 @app.get("/health", tags=["Health"])
 def health_check(health_service: HealthService = Depends(get_health_service)):
     return health_service.get_health_status()
@@ -901,6 +1055,7 @@ def serialize_delivery(delivery: DeliveryEntity) -> DeliveryResponse:
             id=delivery.customer.id,
             name=delivery.customer.name,
             email=delivery.customer.email,
+            phone_number=delivery.customer.phone_number,
         ),
         address=AddressResponse(
             id=delivery.address.id,
@@ -909,4 +1064,13 @@ def serialize_delivery(delivery: DeliveryEntity) -> DeliveryResponse:
             country=delivery.address.country,
             zip_code=delivery.address.zip_code,
         ),
+    )
+
+
+def serialize_customer(customer: CustomerEntity) -> CustomerResponse:
+    return CustomerResponse(
+        id=customer.id,
+        name=customer.name,
+        email=customer.email,
+        phone_number=customer.phone_number,
     )
