@@ -414,14 +414,14 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
 
 
 # Publisher Adapter using Pika
-class InventoryPublisher:
+class BaseMessagingAdapter:
     def __init__(self, connection_params, max_retries=5, delay=5):
         self.connection_params = connection_params
         self.max_retries = max_retries
         self.delay = delay
         self.connection = None
         self.channel = None
-        self.exchange_name = "inventory_exchange"
+        self.exchange_name = None  # Set in derived classes
         self.connect()
 
     def connect(self):
@@ -435,23 +435,26 @@ class InventoryPublisher:
                 return
             except pika.exceptions.AMQPConnectionError as e:
                 attempts += 1
-                logger.error(
+                logging.error(
                     f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
                 )
                 time.sleep(self.delay)
 
-        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
+        logging.error("Max retries exceeded. Could not connect to RabbitMQ.")
         raise pika.exceptions.AMQPConnectionError(
             "Failed to connect to RabbitMQ after multiple attempts."
         )
 
+
+# Publisher Adapter using BaseMessagingAdapter
+class InventoryPublisher(BaseMessagingAdapter):
+    def __init__(self, connection_params, max_retries=5, delay=5):
+        super().__init__(connection_params, max_retries, delay)
+        self.exchange_name = "inventory_exchange"
+
     def publish_inventory_update(self, sku: str, action: str, quantity: int):
         message = json.dumps(
-            {
-                "sku": sku,
-                "action": action,
-                "quantity": quantity,
-            }
+            {"sku": sku, "action": action, "quantity": quantity}
         )
         try:
             self.channel.basic_publish(
@@ -459,51 +462,21 @@ class InventoryPublisher:
                 routing_key="inventory_queue",
                 body=message,
             )
-            logger.info(f"Published inventory update: {message}")
+            logging.info(f"Published inventory update: {message}")
         except pika.exceptions.ConnectionClosed:
-            logger.error("Connection closed, attempting to reconnect.")
+            logging.error("Connection closed, attempting to reconnect.")
             self.connect()
             self.publish_inventory_update(sku, action, quantity)
 
 
-class OrderUpdatePublisher:
+class OrderUpdatePublisher(BaseMessagingAdapter):
     def __init__(self, connection_params, max_retries=5, delay=5):
-        self.connection_params = connection_params
-        self.max_retries = max_retries
-        self.delay = delay
-        self.connection = None
-        self.channel = None
+        super().__init__(connection_params, max_retries, delay)
         self.exchange_name = "orders_exchange"
-        self.connect()
-
-    def connect(self):
-        attempts = 0
-        while attempts < self.max_retries:
-            try:
-                self.connection = pika.BlockingConnection(
-                    self.connection_params
-                )
-                self.channel = self.connection.channel()
-                return
-            except pika.exceptions.AMQPConnectionError as e:
-                attempts += 1
-                logger.error(
-                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
-                )
-                time.sleep(self.delay)
-
-        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
-        raise pika.exceptions.AMQPConnectionError(
-            "Failed to connect to RabbitMQ after multiple attempts."
-        )
 
     def publish_order_update(self, order_id: int, amount: float, status: str):
         message = json.dumps(
-            {
-                "order_id": order_id,
-                "amount": amount,
-                "status": status,
-            }
+            {"order_id": order_id, "amount": amount, "status": status}
         )
         try:
             self.channel.basic_publish(
@@ -511,51 +484,22 @@ class OrderUpdatePublisher:
                 routing_key="orders_queue",
                 body=message,
             )
-            logger.info(f"Published order update: {message} to orders_queue")
+            logging.info(f"Published order update: {message} to orders_queue")
         except pika.exceptions.ConnectionClosed:
-            logger.error("Connection closed, attempting to reconnect.")
+            logging.error("Connection closed, attempting to reconnect.")
             self.connect()
             self.publish_order_update(order_id, amount, status)
 
 
-# Subscriber Adapter using Pika
-class PaymentSubscriber:
-
+# Subscriber Adapter using BaseMessagingAdapter
+class PaymentSubscriber(BaseMessagingAdapter):
     def __init__(
-        self,
-        order_service: "OrderService",
-        max_retries: int = 5,
-        delay: int = 5,
+        self, order_service, connection_params, max_retries=5, delay=5
     ):
+        super().__init__(connection_params, max_retries, delay)
         self.order_service = order_service
-        self.connection_params = pika.ConnectionParameters(host="rabbitmq")
-        self.max_retries = max_retries
-        self.delay = delay
-
-    def connect(self):
-        attempts = 0
-        while attempts < self.max_retries:
-            try:
-                self.connection = pika.BlockingConnection(
-                    self.connection_params
-                )
-                self.channel = self.connection.channel()
-                return True
-            except pika.exceptions.AMQPConnectionError as e:
-                attempts += 1
-                logger.error(
-                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
-                )
-                time.sleep(self.delay)
-
-        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
-        return False
 
     def start_consuming(self):
-        if not self.connect():
-            logger.error("Failed to start consuming. Exiting.")
-            return
-
         self.channel.exchange_declare(
             exchange="payment_exchange", exchange_type="topic", durable=True
         )
@@ -571,12 +515,11 @@ class PaymentSubscriber:
             on_message_callback=self.on_message,
             auto_ack=False,
         )
-
-        logger.info("Starting to consume messages from payment_queue.")
+        logging.info("Starting to consume messages from payment_queue.")
         self.channel.start_consuming()
 
     def on_message(self, ch, method, properties, body):
-        logger.info(f"Received message from payment_queue: {body}")
+        logging.info(f"Received message from payment_queue: {body}")
         try:
             data = json.loads(body.decode("utf-8"))
             order_id = data.get("order_id")
@@ -584,53 +527,24 @@ class PaymentSubscriber:
 
             if status == "completed":
                 self.order_service.set_paid_order(order_id)
-                logger.info(f"Order ID {order_id} marked as paid.")
+                logging.info(f"Order ID {order_id} marked as paid.")
             if status in ["refunded", "canceled"]:
                 self.order_service.cancel_order(order_id)
-                logger.info(f"Order ID {order_id} marked as canceled.")
+                logging.info(f"Order ID {order_id} marked as canceled.")
         except Exception as e:
-            logger.error(f"Error processing message: {e}")
+            logging.error(f"Error processing message: {e}")
         finally:
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
-class DeliverySubscriber:
-
+class DeliverySubscriber(BaseMessagingAdapter):
     def __init__(
-        self,
-        order_service: "OrderService",
-        max_retries: int = 5,
-        delay: int = 5,
+        self, order_service, connection_params, max_retries=5, delay=5
     ):
+        super().__init__(connection_params, max_retries, delay)
         self.order_service = order_service
-        self.connection_params = pika.ConnectionParameters(host="rabbitmq")
-        self.max_retries = max_retries
-        self.delay = delay
-
-    def connect(self):
-        attempts = 0
-        while attempts < self.max_retries:
-            try:
-                self.connection = pika.BlockingConnection(
-                    self.connection_params
-                )
-                self.channel = self.connection.channel()
-                return True
-            except pika.exceptions.AMQPConnectionError as e:
-                attempts += 1
-                logger.error(
-                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
-                )
-                time.sleep(self.delay)
-
-        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
-        return False
 
     def start_consuming(self):
-        if not self.connect():
-            logger.error("Failed to start consuming. Exiting.")
-            return
-
         self.channel.exchange_declare(
             exchange="delivery_exchange", exchange_type="topic", durable=True
         )
@@ -646,12 +560,11 @@ class DeliverySubscriber:
             on_message_callback=self.on_message,
             auto_ack=False,
         )
-
-        logger.info("Starting to consume messages from delivery_queue.")
+        logging.info("Starting to consume messages from delivery_queue.")
         self.channel.start_consuming()
 
     def on_message(self, ch, method, properties, body):
-        logger.info(f"Received message from delivery_queue: {body}")
+        logging.info(f"Received message from delivery_queue: {body}")
         try:
             data = json.loads(body.decode("utf-8"))
             order_id = data.get("order_id")
@@ -661,14 +574,14 @@ class DeliverySubscriber:
                 self.order_service.update_order_status(
                     order_id, OrderStatus.SHIPPED
                 )
-                logger.info(f"Order ID {order_id} marked as shipped.")
+                logging.info(f"Order ID {order_id} marked as shipped.")
             if status == "delivered":
                 self.order_service.update_order_status(
                     order_id, OrderStatus.DELIVERED
                 )
-                logger.info(f"Order ID {order_id} marked as delivered.")
+                logging.info(f"Order ID {order_id} marked as delivered.")
         except Exception as e:
-            logger.error(f"Error processing message: {e}")
+            logging.error(f"Error processing message: {e}")
         finally:
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -971,9 +884,9 @@ def on_startup():
         inventory_publisher,
         order_update_publisher,
     )
-
-    payment_subscriber = PaymentSubscriber(order_service)
-    delivery_subscriber = DeliverySubscriber(order_service)
+    connection_params = pika.ConnectionParameters(host="rabbitmq")
+    payment_subscriber = PaymentSubscriber(order_service, connection_params)
+    delivery_subscriber = DeliverySubscriber(order_service, connection_params)
     threading.Thread(target=payment_subscriber.start_consuming).start()
     threading.Thread(target=delivery_subscriber.start_consuming).start()
 
