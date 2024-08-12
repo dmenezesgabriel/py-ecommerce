@@ -289,14 +289,13 @@ class MongoDBPaymentRepository(PaymentRepository):
 
 
 # Publisher Adapter using Pika
-class PaymentPublisher:
+class BaseMessagingAdapter:
     def __init__(self, connection_params, max_retries=5, delay=5):
         self.connection_params = connection_params
         self.max_retries = max_retries
         self.delay = delay
         self.connection = None
         self.channel = None
-        self.exchange_name = "payment_exchange"
         self.connect()
 
     def connect(self):
@@ -319,6 +318,12 @@ class PaymentPublisher:
         raise pika.exceptions.AMQPConnectionError(
             "Failed to connect to RabbitMQ after multiple attempts."
         )
+
+
+class PaymentPublisher(BaseMessagingAdapter):
+    def __init__(self, connection_params, max_retries=5, delay=5):
+        super().__init__(connection_params, max_retries, delay)
+        self.exchange_name = "payment_exchange"
 
     def publish_payment_update(
         self, payment_id: str, order_id: int, status: str
@@ -345,44 +350,15 @@ class PaymentPublisher:
             self.publish_payment_update(payment_id, order_id, status)
 
 
-# Subscriber Adapter using Pika
-class OrderSubscriber:
-
+class OrderSubscriber(BaseMessagingAdapter):
     def __init__(
-        self,
-        payment_service: PaymentService,
-        max_retries: int = 5,
-        delay: int = 5,
+        self, payment_service: PaymentService, max_retries=5, delay=5
     ):
         self.payment_service = payment_service
-        self.connection_params = pika.ConnectionParameters(host="rabbitmq")
-        self.max_retries = max_retries
-        self.delay = delay
-
-    def connect(self):
-        attempts = 0
-        while attempts < self.max_retries:
-            try:
-                self.connection = pika.BlockingConnection(
-                    self.connection_params
-                )
-                self.channel = self.connection.channel()
-                return True
-            except pika.exceptions.AMQPConnectionError as e:
-                attempts += 1
-                logger.error(
-                    f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
-                )
-                time.sleep(self.delay)
-
-        logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
-        return False
+        connection_params = pika.ConnectionParameters(host="rabbitmq")
+        super().__init__(connection_params, max_retries, delay)
 
     def start_consuming(self):
-        if not self.connect():
-            logger.error("Failed to start consuming. Exiting.")
-            return
-
         self.channel.exchange_declare(
             exchange="orders_exchange", exchange_type="topic", durable=True
         )
