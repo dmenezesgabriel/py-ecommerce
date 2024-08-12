@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import Column, Enum, ForeignKey, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
-from sqlalchemy.sql import text  # Import the text function
+from sqlalchemy.sql import text
 
 app = FastAPI()
 
@@ -635,6 +635,27 @@ class OrderService:
         self.inventory_publisher = inventory_publisher
         self.order_update_publisher = order_update_publisher
 
+    async def validate_inventory(
+        self, order_items: List[OrderItemEntity]
+    ) -> bool:
+        async with aiohttp.ClientSession() as session:
+            for item in order_items:
+                async with session.get(
+                    f"http://inventory_service:8001/products/{item.product_sku}"
+                ) as response:
+                    if response.status != 200:
+                        logger.error(
+                            f"Product SKU {item.product_sku} not found in inventory."
+                        )
+                        return False
+                    product = await response.json()
+                    if product["quantity"] < item.quantity:
+                        logger.error(
+                            f"Insufficient quantity for SKU {item.product_sku}."
+                        )
+                        return False
+        return True
+
     async def create_order(
         self, customer: CustomerEntity, order_items: List[OrderItemEntity]
     ) -> OrderEntity:
@@ -646,6 +667,13 @@ class OrderService:
             existing_customer = customer
         else:
             customer.id = existing_customer.id
+
+        # Validate inventory before creating the order
+        if not await self.validate_inventory(order_items):
+            raise HTTPException(
+                status_code=400,
+                detail="One or more items in the order are not available in the required quantity.",
+            )
 
         order = OrderEntity(
             customer=existing_customer,
@@ -701,6 +729,13 @@ class OrderService:
             existing_customer = customer
         else:
             customer.id = existing_customer.id
+
+        # Validate inventory before updating the order
+        if not await self.validate_inventory(order_items):
+            raise HTTPException(
+                status_code=400,
+                detail="One or more items in the order are not available in the required quantity.",
+            )
 
         inventory_changes = []
 
