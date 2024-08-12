@@ -62,7 +62,7 @@ class OrderStatus(PyEnum):
     SHIPPED = "shipped"
     DELIVERED = "delivered"
     CANCELED = "canceled"
-    PAID = "paid"  # New status added
+    PAID = "paid"
 
 
 class CustomerEntity:
@@ -88,12 +88,15 @@ class OrderEntity:
         order_items: List[OrderItemEntity],
         status: OrderStatus = OrderStatus.PENDING,
         id: Optional[int] = None,
+        order_number: Optional[str] = None,
+        total_amount: Optional[float] = None,
     ):
         self.id = id
-        self.order_number = str(uuid.uuid4())
+        self.order_number = order_number or str(uuid.uuid4())
         self.customer = customer
         self.order_items = order_items
         self.status = status
+        self.total_amount = total_amount or 0.0
 
     def add_item(self, order_item: OrderItemEntity):
         self.order_items.append(order_item)
@@ -247,6 +250,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                     for item in order_items
                 ],
                 status=db_order.status,
+                order_number=db_order.order_number,
             )
         return None
 
@@ -283,6 +287,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                     for item in order_items
                 ],
                 status=db_order.status,
+                order_number=db_order.order_number,
             )
         return None
 
@@ -313,6 +318,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                     for item in db_order.order_items
                 ],
                 status=db_order.status,
+                order_number=db_order.order_number,
             )
             for db_order in db_orders
         ]
@@ -653,8 +659,8 @@ class OrderService:
                 )
 
             self.order_repository.save(order)
-            total_amount = await self.calculate_order_total(order)
-            return order, total_amount
+            order.total_amount = await self.calculate_order_total(order)
+            return order
 
         except Exception as e:
             for item in order_items:
@@ -729,8 +735,8 @@ class OrderService:
             order.customer = existing_customer
             order.order_items = order_items
             self.order_repository.save(order)
-            total_amount = await self.calculate_order_total(order)
-            return order, total_amount
+            order.total_amount = await self.calculate_order_total(order)
+            return order
 
         except Exception as e:
             for sku, quantity in inventory_changes:
@@ -767,10 +773,10 @@ class OrderService:
         order.update_status(OrderStatus.CONFIRMED)
         self.order_repository.save(order)
         try:
-            total_amount = await self.calculate_order_total(order)
+            order.total_amount = await self.calculate_order_total(order)
             self.order_update_publisher.publish_order_update(
                 order_id=order.id,
-                amount=total_amount,
+                amount=order.total_amount,
                 status=order.status.value,
             )
         except Exception as e:
@@ -1012,10 +1018,8 @@ async def create_order(
         OrderItemEntity(product_sku=item.product_sku, quantity=item.quantity)
         for item in order.order_items
     ]
-    created_order, total_amount = await service.create_order(
-        customer_entity, order_items
-    )
-    return serialize_order(created_order, total_amount)
+    created_order = await service.create_order(customer_entity, order_items)
+    return serialize_order(created_order, created_order.total_amount)
 
 
 @app.get("/orders/", response_model=List[OrderResponse])
@@ -1071,10 +1075,10 @@ async def update_order(
         for item in order.order_items
     ]
     try:
-        updated_order, total_amount = await service.update_order(
+        updated_order = await service.update_order(
             order_id, customer_entity, order_items
         )
-        return serialize_order(updated_order, total_amount)
+        return serialize_order(updated_order, updated_order.total_amount)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
 
