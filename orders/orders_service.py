@@ -191,7 +191,9 @@ class SQLAlchemyOrderRepository(OrderRepository):
         )
         if not customer_model:
             customer_model = CustomerModel(
-                name=order.customer.name, email=order.customer.email
+                name=order.customer.name,
+                email=order.customer.email,
+                phone_number=order.customer.phone_number,
             )
             self.db.add(customer_model)
             self.db.commit()
@@ -252,6 +254,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                     id=customer.id,
                     name=customer.name,
                     email=customer.email,
+                    phone_number=customer.phone_number,
                 ),
                 order_items=[
                     OrderItemEntity(
@@ -289,6 +292,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                     id=customer.id,
                     name=customer.name,
                     email=customer.email,
+                    phone_number=customer.phone_number,
                 ),
                 order_items=[
                     OrderItemEntity(
@@ -320,6 +324,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                     id=db_order.customer.id,
                     name=db_order.customer.name,
                     email=db_order.customer.email,
+                    phone_number=db_order.customer.phone_number,
                 ),
                 order_items=[
                     OrderItemEntity(
@@ -1028,10 +1033,17 @@ class OrderItemCreate(BaseModel):
 class CustomerCreate(BaseModel):
     name: str
     email: str
+    phone_number: Optional[str] = None
 
     class Config:
         json_schema_extra = {
-            "examples": [{"name": "John Doe", "email": "john.doe@example.com"}]
+            "examples": [
+                {
+                    "name": "John Doe",
+                    "email": "john.doe@example.com",
+                    "phone_number": "+123456789",
+                }
+            ]
         }
 
 
@@ -1046,6 +1058,7 @@ class OrderCreate(BaseModel):
                     "customer": {
                         "name": "John Doe",
                         "email": "john.doe@example.com",
+                        "phone_number": "+123456789",
                     },
                     "order_items": [
                         {"product_sku": "ABC123", "quantity": 2},
@@ -1095,7 +1108,9 @@ async def create_order(
     order: OrderCreate, service: OrderService = Depends(get_order_service)
 ):
     customer_entity = CustomerEntity(
-        name=order.customer.name, email=order.customer.email
+        name=order.customer.name,
+        email=order.customer.email,
+        phone_number=order.customer.phone_number,
     )
     order_items = [
         OrderItemEntity(product_sku=item.product_sku, quantity=item.quantity)
