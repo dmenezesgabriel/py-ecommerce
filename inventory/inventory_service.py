@@ -8,8 +8,14 @@ from typing import List, Optional
 import pika
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import (Column, Float, ForeignKey, Integer, String,
-                        create_engine)
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    create_engine,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
 from sqlalchemy.sql import text
@@ -655,7 +661,7 @@ class InventoryUpdate(BaseModel):
     quantity: int
 
 
-@app.post("/products/", response_model=ProductResponse)
+@app.post("/products/", tags=["Product"], response_model=ProductResponse)
 def create_product(
     product: ProductCreate,
     service: ProductService = Depends(get_product_service),
@@ -673,13 +679,13 @@ def create_product(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/products/", response_model=List[ProductResponse])
+@app.get("/products/", tags=["Product"], response_model=List[ProductResponse])
 def read_products(service: ProductService = Depends(get_product_service)):
     products = service.list_products()
     return [serialize_product(product) for product in products]
 
 
-@app.get("/products/{sku}", response_model=ProductResponse)
+@app.get("/products/{sku}", tags=["Product"], response_model=ProductResponse)
 def read_product(
     sku: str, service: ProductService = Depends(get_product_service)
 ):
@@ -690,7 +696,7 @@ def read_product(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.put("/products/{sku}", response_model=ProductResponse)
+@app.put("/products/{sku}", tags=["Product"], response_model=ProductResponse)
 def update_product(
     sku: str,
     product: ProductUpdate,
@@ -709,7 +715,9 @@ def update_product(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.delete("/products/{sku}", response_model=ProductResponse)
+@app.delete(
+    "/products/{sku}", tags=["Product"], response_model=ProductResponse
+)
 def delete_product(
     sku: str, service: ProductService = Depends(get_product_service)
 ):
@@ -722,6 +730,7 @@ def delete_product(
 
 @app.get(
     "/products/by-category/{category_name}",
+    tags=["Product"],
     response_model=List[ProductResponse],
 )
 def get_products_by_category(
@@ -734,7 +743,9 @@ def get_products_by_category(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.post("/inventory/{sku}/add", response_model=ProductResponse)
+@app.post(
+    "/inventory/{sku}/add", tags=["Inventory"], response_model=ProductResponse
+)
 def add_inventory(
     sku: str,
     inventory_update: InventoryUpdate,
@@ -747,7 +758,11 @@ def add_inventory(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.post("/inventory/{sku}/subtract", response_model=ProductResponse)
+@app.post(
+    "/inventory/{sku}/subtract",
+    tags=["Inventory"],
+    response_model=ProductResponse,
+)
 def subtract_inventory(
     sku: str,
     inventory_update: InventoryUpdate,
@@ -762,7 +777,7 @@ def subtract_inventory(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/categories/", response_model=CategoryResponse)
+@app.post("/categories/", tags=["Categories"], response_model=CategoryResponse)
 def create_category(
     category: CategoryCreate,
     service: ProductService = Depends(get_product_service),
@@ -774,7 +789,9 @@ def create_category(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/categories/", response_model=List[CategoryResponse])
+@app.get(
+    "/categories/", tags=["Categories"], response_model=List[CategoryResponse]
+)
 def list_categories(service: ProductService = Depends(get_product_service)):
     categories = service.list_categories()
     return [serialize_category(category) for category in categories]

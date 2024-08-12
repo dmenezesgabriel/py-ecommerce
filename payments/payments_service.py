@@ -499,7 +499,7 @@ class PaymentResponse(BaseModel):
         }
 
 
-@app.post("/payments/", response_model=PaymentResponse)
+@app.post("/payments/", tags=["Payments"], response_model=PaymentResponse)
 def create_payment(
     payment: PaymentCreate,
     service: PaymentService = Depends(get_payment_service),
@@ -515,7 +515,7 @@ def create_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/payments/", response_model=List[PaymentResponse])
+@app.get("/payments/", tags=["Payments"], response_model=List[PaymentResponse])
 def read_payments(service: PaymentService = Depends(get_payment_service)):
     payments = service.payment_repository.db.find()
     return [
@@ -531,7 +531,9 @@ def read_payments(service: PaymentService = Depends(get_payment_service)):
     ]
 
 
-@app.get("/payments/{payment_id}", response_model=PaymentResponse)
+@app.get(
+    "/payments/{payment_id}", tags=["Payments"], response_model=PaymentResponse
+)
 def read_payment(
     payment_id: str, service: PaymentService = Depends(get_payment_service)
 ):
@@ -542,7 +544,11 @@ def read_payment(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.get("/payments/by-order-id/{order_id}", response_model=PaymentResponse)
+@app.get(
+    "/payments/by-order-id/{order_id}",
+    tags=["Payments"],
+    response_model=PaymentResponse,
+)
 def read_payment_by_order_id(
     order_id: int, service: PaymentService = Depends(get_payment_service)
 ):
@@ -553,7 +559,9 @@ def read_payment_by_order_id(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.put("/payments/{payment_id}", response_model=PaymentResponse)
+@app.put(
+    "/payments/{payment_id}", tags=["Payments"], response_model=PaymentResponse
+)
 def update_payment(
     payment_id: str,
     payment: PaymentUpdate,
@@ -573,7 +581,11 @@ def update_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.put("/payments/{payment_id}/status", response_model=PaymentResponse)
+@app.put(
+    "/payments/{payment_id}/status",
+    tags=["Payments"],
+    response_model=PaymentResponse,
+)
 def update_payment_status(
     payment_id: str,
     status_update: PaymentStatusUpdate,
@@ -590,7 +602,11 @@ def update_payment_status(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.put("/payments/{payment_id}/complete", response_model=PaymentResponse)
+@app.put(
+    "/payments/{payment_id}/complete",
+    tags=["Payments"],
+    response_model=PaymentResponse,
+)
 def complete_payment(
     payment_id: str,
     service: PaymentService = Depends(get_payment_service),
@@ -606,7 +622,11 @@ def complete_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.put("/payments/{payment_id}/fail", response_model=PaymentResponse)
+@app.put(
+    "/payments/{payment_id}/fail",
+    tags=["Payments"],
+    response_model=PaymentResponse,
+)
 def fail_payment(
     payment_id: str,
     service: PaymentService = Depends(get_payment_service),
@@ -622,7 +642,11 @@ def fail_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.put("/payments/{payment_id}/refund", response_model=PaymentResponse)
+@app.put(
+    "/payments/{payment_id}/refund",
+    tags=["Payments"],
+    response_model=PaymentResponse,
+)
 def refund_payment(
     payment_id: str,
     service: PaymentService = Depends(get_payment_service),
@@ -638,7 +662,11 @@ def refund_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.put("/payments/{payment_id}/cancel", response_model=PaymentResponse)
+@app.put(
+    "/payments/{payment_id}/cancel",
+    tags=["Payments"],
+    response_model=PaymentResponse,
+)
 def cancel_payment(
     payment_id: str,
     service: PaymentService = Depends(get_payment_service),
@@ -652,7 +680,7 @@ def cancel_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.delete("/payments/{payment_id}")
+@app.delete("/payments/{payment_id}", tags=["Payments"])
 def delete_payment(
     payment_id: str, service: PaymentService = Depends(get_payment_service)
 ):
