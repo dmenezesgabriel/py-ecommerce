@@ -133,6 +133,9 @@ class CustomerRepository:
     def list_all(self) -> List[CustomerEntity]:
         raise NotImplementedError
 
+    def delete(self, customer: CustomerEntity):
+        raise NotImplementedError
+
 
 # Adapters
 # SQLAlchemy Mappers and Repositories
@@ -141,6 +144,7 @@ class CustomerModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     email = Column(String, unique=True, index=True)
+    deleted = Column(Integer, default=0)  # Logical delete column
     orders = relationship("OrderModel", back_populates="customer")
 
 
@@ -329,8 +333,21 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
         self.db = db
 
     def save(self, customer: CustomerEntity):
-        db_customer = CustomerModel(name=customer.name, email=customer.email)
-        self.db.add(db_customer)
+        db_customer = (
+            self.db.query(CustomerModel)
+            .filter(CustomerModel.email == customer.email)
+            .first()
+        )
+
+        if not db_customer:
+            db_customer = CustomerModel(
+                name=customer.name, email=customer.email
+            )
+            self.db.add(db_customer)
+        else:
+            db_customer.name = customer.name
+            db_customer.email = customer.email
+
         self.db.commit()
         self.db.refresh(db_customer)
         customer.id = db_customer.id
@@ -338,7 +355,7 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
     def find_by_email(self, email: str) -> Optional[CustomerEntity]:
         db_customer = (
             self.db.query(CustomerModel)
-            .filter(CustomerModel.email == email)
+            .filter(CustomerModel.email == email, CustomerModel.deleted == 0)
             .first()
         )
         if db_customer:
@@ -350,7 +367,11 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
         return None
 
     def list_all(self) -> List[CustomerEntity]:
-        db_customers = self.db.query(CustomerModel).all()
+        db_customers = (
+            self.db.query(CustomerModel)
+            .filter(CustomerModel.deleted == 0)
+            .all()
+        )
         return [
             CustomerEntity(
                 id=db_customer.id,
@@ -359,6 +380,19 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
             )
             for db_customer in db_customers
         ]
+
+    def delete(self, customer: CustomerEntity):
+        db_customer = (
+            self.db.query(CustomerModel)
+            .filter(CustomerModel.id == customer.id)
+            .first()
+        )
+
+        if db_customer:
+            db_customer.name = f"deleted_user_{db_customer.id}"
+            db_customer.email = f"deleted_email_{db_customer.id}@example.com"
+            db_customer.deleted = 1
+            self.db.commit()
 
 
 # Publisher Adapter using Pika
@@ -1210,14 +1244,15 @@ async def update_customer(
     return serialize_customer(customer_entity)
 
 
-@app.delete("/customers/{customer_id}", status_code=204)
+@app.delete("/customers/", status_code=204)
 async def delete_customer(
-    customer_id: int, service: OrderService = Depends(get_order_service)
+    email: str, service: OrderService = Depends(get_order_service)
 ):
-    customer_entity = service.customer_repository.find_by_email(customer_id)
+    customer_entity = service.customer_repository.find_by_email(email)
     if not customer_entity:
         raise HTTPException(status_code=404, detail="Customer not found")
     service.customer_repository.delete(customer_entity)
+    return {"message": "Customer deleted successfully"}
 
 
 @app.get("/health", tags=["Health"])
