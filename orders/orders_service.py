@@ -66,10 +66,17 @@ class OrderStatus(PyEnum):
 
 
 class CustomerEntity:
-    def __init__(self, name: str, email: str, id: Optional[int] = None):
+    def __init__(
+        self,
+        name: str,
+        email: str,
+        phone_number: Optional[str] = None,
+        id: Optional[int] = None,
+    ):
         self.id = id
         self.name = name
         self.email = email
+        self.phone_number = phone_number
 
 
 class OrderItemEntity:
@@ -144,6 +151,7 @@ class CustomerModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     email = Column(String, unique=True, index=True)
+    phone_number = Column(String, nullable=True)
     deleted = Column(Integer, default=0)  # Logical delete column
     orders = relationship("OrderModel", back_populates="customer")
 
@@ -341,12 +349,15 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
 
         if not db_customer:
             db_customer = CustomerModel(
-                name=customer.name, email=customer.email
+                name=customer.name,
+                email=customer.email,
+                phone_number=customer.phone_number,
             )
             self.db.add(db_customer)
         else:
             db_customer.name = customer.name
             db_customer.email = customer.email
+            db_customer.phone_number = customer.phone_number
 
         self.db.commit()
         self.db.refresh(db_customer)
@@ -391,6 +402,8 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
         if db_customer:
             db_customer.name = f"deleted_user_{db_customer.id}"
             db_customer.email = f"deleted_email_{db_customer.id}@example.com"
+            db_customer.phone_number = f"deleted_phone_number_{db_customer.id}"
+
             db_customer.deleted = 1
             self.db.commit()
 
@@ -1055,6 +1068,7 @@ class CustomerResponse(BaseModel):
     id: int
     name: str
     email: str
+    phone_number: Optional[str] = None
 
     class Config:
         orm_mode = True
@@ -1076,7 +1090,7 @@ class OrderStatusUpdate(BaseModel):
     status: OrderStatus
 
 
-@app.post("/orders/", response_model=OrderResponse)
+@app.post("/orders/", tags=["Orders"], response_model=OrderResponse)
 async def create_order(
     order: OrderCreate, service: OrderService = Depends(get_order_service)
 ):
@@ -1091,7 +1105,7 @@ async def create_order(
     return serialize_order(created_order, created_order.total_amount)
 
 
-@app.get("/orders/", response_model=List[OrderResponse])
+@app.get("/orders/", tags=["Orders"], response_model=List[OrderResponse])
 async def read_orders(service: OrderService = Depends(get_order_service)):
     orders = service.list_orders()
     orders_with_amounts = [
@@ -1104,7 +1118,7 @@ async def read_orders(service: OrderService = Depends(get_order_service)):
     ]
 
 
-@app.get("/orders/{order_id}", response_model=OrderResponse)
+@app.get("/orders/{order_id}", tags=["Orders"], response_model=OrderResponse)
 async def read_order(
     order_id: int, service: OrderService = Depends(get_order_service)
 ):
@@ -1117,7 +1131,9 @@ async def read_order(
 
 
 @app.get(
-    "/orders/by-order-number/{order_number}", response_model=OrderResponse
+    "/orders/by-order-number/{order_number}",
+    tags=["Orders"],
+    response_model=OrderResponse,
 )
 async def read_order_by_order_number(
     order_number: str, service: OrderService = Depends(get_order_service)
@@ -1130,7 +1146,7 @@ async def read_order_by_order_number(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.put("/orders/{order_id}", response_model=OrderResponse)
+@app.put("/orders/{order_id}", tags=["Orders"], response_model=OrderResponse)
 async def update_order(
     order_id: int,
     order: OrderCreate,
@@ -1152,7 +1168,9 @@ async def update_order(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.put("/orders/{order_id}/status", response_model=OrderResponse)
+@app.put(
+    "/orders/{order_id}/status", tags=["Orders"], response_model=OrderResponse
+)
 async def update_order_status(
     order_id: int,
     status_update: OrderStatusUpdate,
@@ -1168,7 +1186,9 @@ async def update_order_status(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.put("/orders/{order_id}/confirm", response_model=OrderResponse)
+@app.put(
+    "/orders/{order_id}/confirm", tags=["Orders"], response_model=OrderResponse
+)
 async def confirm_order(
     order_id: int, service: OrderService = Depends(get_order_service)
 ):
@@ -1180,7 +1200,9 @@ async def confirm_order(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.put("/orders/{order_id}/cancel", response_model=OrderResponse)
+@app.put(
+    "/orders/{order_id}/cancel", tags=["Orders"], response_model=OrderResponse
+)
 async def cancel_order(
     order_id: int, service: OrderService = Depends(get_order_service)
 ):
@@ -1192,7 +1214,7 @@ async def cancel_order(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.delete("/orders/{order_id}", status_code=204)
+@app.delete("/orders/{order_id}", tags=["Orders"], status_code=204)
 async def delete_order(
     order_id: int, service: OrderService = Depends(get_order_service)
 ):
@@ -1203,23 +1225,27 @@ async def delete_order(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.get("/customers/", response_model=List[CustomerResponse])
+@app.get(
+    "/customers/", tags=["Customer"], response_model=List[CustomerResponse]
+)
 async def read_customers(service: OrderService = Depends(get_order_service)):
     customers = service.customer_repository.list_all()
     return [serialize_customer(customer) for customer in customers]
 
 
-@app.get("/customers/{customer_id}", response_model=CustomerResponse)
+@app.get(
+    "/customers/{email}", tags=["Customer"], response_model=CustomerResponse
+)
 async def read_customer(
-    customer_id: int, service: OrderService = Depends(get_order_service)
+    email: str, service: OrderService = Depends(get_order_service)
 ):
-    customer = service.customer_repository.find_by_email(customer_id)
+    customer = service.customer_repository.find_by_email(email)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return serialize_customer(customer)
 
 
-@app.post("/customers/", response_model=CustomerResponse)
+@app.post("/customers/", tags=["Customer"], response_model=CustomerResponse)
 async def create_customer(
     customer: CustomerCreate,
     service: OrderService = Depends(get_order_service),
@@ -1229,13 +1255,17 @@ async def create_customer(
     return serialize_customer(customer_entity)
 
 
-@app.put("/customers/{customer_id}", response_model=CustomerResponse)
+@app.put(
+    "/customers/{customer_id}",
+    tags=["Customer"],
+    response_model=CustomerResponse,
+)
 async def update_customer(
-    customer_id: int,
+    email: str,
     customer: CustomerCreate,
     service: OrderService = Depends(get_order_service),
 ):
-    customer_entity = service.customer_repository.find_by_email(customer.email)
+    customer_entity = service.customer_repository.find_by_email(email)
     if not customer_entity:
         raise HTTPException(status_code=404, detail="Customer not found")
     customer_entity.name = customer.name
@@ -1244,7 +1274,7 @@ async def update_customer(
     return serialize_customer(customer_entity)
 
 
-@app.delete("/customers/", status_code=204)
+@app.delete("/customers/", tags=["Customer"], status_code=204)
 async def delete_customer(
     email: str, service: OrderService = Depends(get_order_service)
 ):
@@ -1284,4 +1314,5 @@ def serialize_customer(customer: CustomerEntity) -> CustomerResponse:
         id=customer.id,
         name=customer.name,
         email=customer.email,
+        phone_number=customer.phone_number,
     )
