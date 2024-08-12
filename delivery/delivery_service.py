@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import threading
 import time
 from enum import Enum
 from typing import List, Optional
