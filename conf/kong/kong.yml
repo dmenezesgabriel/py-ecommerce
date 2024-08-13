@@ -1,30 +1,43 @@
-_format_version: "2.1"
+_format_version: "3.0"
+_transform: true
 
 services:
   - name: inventory-service
-    url: http://inventory_service:8001
+    host: inventory_service
+    port: 8001
+    protocol: http
     routes:
       - name: inventory-route
         paths:
           - /inventory
+        strip_path: true
 
   - name: orders-service
-    url: http://orders_service:8002
+    host: orders_service
+    port: 8002
+    protocol: http
     routes:
       - name: orders-route
         paths:
           - /orders
+        strip_path: true
 
   - name: payments-service
-    url: http://payments_service:8003
+    host: payments_service
+    port: 8003
+    protocol: http
     routes:
       - name: payments-route
         paths:
           - /payments
+        strip_path: true
 
   - name: delivery-service
-    url: http://delivery_service:8004
+    host: delivery_service
+    port: 8004
+    protocol: http
     routes:
       - name: delivery-route
         paths:
           - /delivery
+        strip_path: true

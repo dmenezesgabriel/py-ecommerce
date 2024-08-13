@@ -7,6 +7,7 @@ x-kong-config: &kong-env
 
 services:
   inventory_service:
+    hostname: inventory_service
     build:
       context: ./inventory
       dockerfile: Dockerfile.inventory
@@ -19,8 +20,15 @@ services:
     command: uvicorn inventory_service:app --host 0.0.0.0 --port 8001 --reload
     depends_on:
       - rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: on-failure
 
   orders_service:
+    hostname: orders_service
     build:
       context: ./orders
       dockerfile: Dockerfile.orders
@@ -33,8 +41,15 @@ services:
     command: uvicorn orders_service:app --host 0.0.0.0 --port 8002 --reload
     depends_on:
       - rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: on-failure
 
   payments_service:
+    hostname: payments_service
     build:
       context: ./payments
       dockerfile: Dockerfile.payments
@@ -47,8 +62,15 @@ services:
     networks:
       - ecommerce_network
     command: uvicorn payments_service:app --host 0.0.0.0 --port 8003 --reload
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8003/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: on-failure
 
   delivery_service:
+    hostname: delivery_service
     build:
       context: ./delivery
       dockerfile: Dockerfile.delivery
@@ -59,8 +81,15 @@ services:
     networks:
       - ecommerce_network
     command: uvicorn delivery_service:app --host 0.0.0.0 --port 8004 --reload
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8004/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: on-failure
 
   postgres:
+    hostname: postgres
     container_name: ${POSTGRES_CONTAINER_NAME:-postgres}
     image: postgres:16.0-alpine
     ports:
@@ -96,6 +125,7 @@ services:
       - ecommerce_network
 
   rabbitmq:
+    hostname: rabbitmq
     image: rabbitmq:3-management-alpine
     ports:
       - 5672:5672
@@ -110,6 +140,7 @@ services:
       - ecommerce_network
 
   keycloak:
+    hostname: keycloak
     image: quay.io/keycloak/keycloak:21.1.1
     environment:
       - KEYCLOAK_ADMIN=admin
@@ -132,7 +163,7 @@ services:
     #   - postgres
 
   kong-migrations:
-    image: kong:3.4.0
+    image: kong/kong-gateway:3.7.1.2
     command: kong migrations bootstrap
     environment:
       <<: *kong-env
@@ -143,22 +174,27 @@ services:
       - postgres
 
   kong:
-    image: kong:3.4.0
+    hostname: kong
+    image: kong/kong-gateway:3.7.1.2
     environment:
       <<: *kong-env
+      KONG_DATABASE: "off" # Database must be off to use KONG_DECLARATIVE_CONFIG
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: 0.0.0.0:8001
-      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 0.0.0.0:8101
+      KONG_PROXY_LISTEN: 0.0.0.0:8100
+      KONG_ADMIN_GUI_URL: http://localhost:8102
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
     ports:
-      - "0.0.0.0:8000:8000/tcp"
-      - "0.0.0.0:8443:8443/tcp"
-      - "0.0.0.0:8001:8001/tcp"
-      - "0.0.0.0:8444:8444/tcp"
+      - "8100:8100/tcp"
+      - "8543:8543/tcp"
+      - "8101:8101/tcp"
+      - "8544:8544/tcp"
+      - "8102:8102/tcp"
     volumes:
-      - ./conf/kong/kong.yml:/usr/local/kong/declarative/kong.yml:ro
+      - ./conf/kong/kong.yml:/kong/declarative/kong.yml
     networks:
       - ecommerce_network
     depends_on:
