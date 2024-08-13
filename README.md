@@ -1,5 +1,7 @@
 https://medium.com/@buffetbenjamin/securing-fastapi-with-keycloak-the-adventure-begins-part-1-e7eae3b79946
 
+## Saga Pattern
+
 ```mermaid
 sequenceDiagram
     participant InventoryService as Inventory Service
@@ -39,6 +41,8 @@ sequenceDiagram
         end
     end
 ```
+
+## Ports and Adapters
 
 ```sh
 delivery_service/
@@ -87,6 +91,44 @@ delivery_service/
 └── requirements.txt
 ```
 
-So kong works with fastapi
+## Kong ApiGateway
 
-- https://fastapi.tiangolo.com/advanced/behind-a-proxy/#providing-the-root_path
+### Kong with FastApi
+
+- [behind-a-proxy](https://fastapi.tiangolo.com/advanced/behind-a-proxy/#providing-the-root_path)
+
+http://localhost:8100/inventory/docs#/
+
+### Docker
+
+- **Check declarative config**:
+
+```sh
+docker-compose exec kong ls /usr/local/kong/declarative/
+```
+
+- **Reload Kong**:
+
+```sh
+docker-compose exec kong kong reload
+```
+
+### Urls
+
+- **Routes**:
+
+```sh
+curl http://localhost:8101/routes
+```
+
+- **Services**:
+
+```sh
+curl http://localhost:8101/services
+```
+
+Example:
+
+```sh
+curl http://localhost:8100/inventory/health
+```
