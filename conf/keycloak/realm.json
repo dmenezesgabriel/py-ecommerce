@@ -1,0 +1,16 @@
+{
+  "realm": "myrealm",
+  "enabled": true,
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": true,
+  "registrationEmailAsUsername": false,
+  "users": [],
+  "clients": [],
+  "roles": {
+    "realm": [],
+    "client": {}
+  }
+}

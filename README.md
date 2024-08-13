@@ -6,19 +6,83 @@ sequenceDiagram
     participant OrderService as Order Service
     participant PaymentService as Payment Service
     participant DeliveryService as Delivery Service
+    participant InventoryQueue as Inventory Queue
+    participant PaymentQueue as Payment Queue
+    participant DeliveryQueue as Delivery Queue
 
-    OrderService->>InventoryService: Check if inventory is available (SKU, Quantity)
+    OrderService->>InventoryService: Check inventory availability (SKU, Quantity)
+
     alt Inventory not available
         InventoryService-->>OrderService: Inventory not available
         OrderService-->>OrderService: Rollback order creation
     else Inventory available
         InventoryService-->>OrderService: Inventory available
-        OrderService->>InventoryService: Send message to subtract inventory (SKU, Quantity, action)
-        InventoryService-->>InventoryQueue: Message to subtract quantity
-        OrderService->>PaymentService: Send payment message (Order ID, Amount, Status: Pending)
-        PaymentService-->>PaymentService: Create payment for order
-        PaymentService-->>OrderService: Payment paid message
-        PaymentService-->>DeliveryService: Payment paid message
-        DeliveryService->>DeliveryService: Create delivery (Status: Pending)
+        OrderService->>InventoryService: Subtract inventory (SKU, Quantity, action: subtract)
+        InventoryService->>InventoryQueue: Publish inventory update message
+        InventoryQueue-->>InventoryService: Confirm inventory update
+
+        OrderService->>PaymentService: Initiate payment (Order ID, Amount, Status: Pending)
+        PaymentService->>PaymentQueue: Publish payment message
+        PaymentQueue-->>PaymentService: Confirm payment processing
+
+        alt Payment successful
+            PaymentService-->>OrderService: Payment confirmed (Order ID, Status: Paid)
+            PaymentService->>DeliveryService: Notify delivery service (Order ID, Status: Paid)
+            DeliveryService->>DeliveryQueue: Publish delivery creation message
+            DeliveryQueue-->>DeliveryService: Confirm delivery creation (Status: Pending)
+        else Payment failed
+            PaymentService-->>OrderService: Payment failed
+            OrderService-->>InventoryService: Revert inventory subtraction (SKU, Quantity)
+            InventoryService->>InventoryQueue: Publish inventory revert message
+            InventoryQueue-->>InventoryService: Confirm inventory revert
+            OrderService-->>OrderService: Rollback order creation
+        end
     end
+```
+
+```sh
+delivery_service/
+│
+├── domain/
+│   ├── entities/
+│   │   ├── delivery_entity.py
+│   │   ├── customer_entity.py
+│   │   └── address_entity.py
+│   ├── exceptions/
+│   │   └── exceptions.py
+│   └── repositories/
+│       ├── delivery_repository.py
+│       └── customer_repository.py
+│
+├── application/
+│   ├── services/
+│   │   ├── delivery_service.py
+│   │   └── order_verification_service.py
+│   └── dto/
+│       ├── delivery_dto.py
+│       └── customer_dto.py
+│
+├── infrastructure/
+│   ├── persistence/
+│   │   ├── sqlalchemy_delivery_repository.py
+│   │   ├── sqlalchemy_customer_repository.py
+│   │   ├── models.py
+│   │   └── db_setup.py
+│   ├── messaging/
+│   │   ├── delivery_publisher.py
+│   ├── health/
+│   │   └── health_service.py
+│   └── config/
+│       └── config.py
+│
+├── adapters/
+│   ├── api/
+│   │   ├── delivery_api.py
+│   │   ├── customer_api.py
+│   │   └── health_api.py
+│   └── messaging/
+│       └── rabbitmq_adapter.py
+│
+├── main.py
+└── requirements.txt
 ```

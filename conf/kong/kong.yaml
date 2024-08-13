@@ -1,0 +1,30 @@
+_format_version: "2.1"
+
+services:
+  - name: inventory-service
+    url: http://inventory_service:8001
+    routes:
+      - name: inventory-route
+        paths:
+          - /inventory
+
+  - name: orders-service
+    url: http://orders_service:8002
+    routes:
+      - name: orders-route
+        paths:
+          - /orders
+
+  - name: payments-service
+    url: http://payments_service:8003
+    routes:
+      - name: payments-route
+        paths:
+          - /payments
+
+  - name: delivery-service
+    url: http://delivery_service:8004
+    routes:
+      - name: delivery-route
+        paths:
+          - /delivery
