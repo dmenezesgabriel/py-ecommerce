@@ -379,6 +379,7 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
                 id=db_customer.id,
                 name=db_customer.name,
                 email=db_customer.email,
+                phone_number=db_customer.phone_number,
             )
         return None
 
@@ -393,6 +394,7 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
                 id=db_customer.id,
                 name=db_customer.name,
                 email=db_customer.email,
+                phone_number=db_customer.phone_number,
             )
             for db_customer in db_customers
         ]
@@ -413,7 +415,7 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
             self.db.commit()
 
 
-# Publisher Adapter using Pika
+# Messaging Base Adapter using Pika
 class BaseMessagingAdapter:
     def __init__(self, connection_params, max_retries=5, delay=5):
         self.connection_params = connection_params
@@ -434,10 +436,10 @@ class BaseMessagingAdapter:
                 self.channel = self.connection.channel()
                 return
             except pika.exceptions.AMQPConnectionError as e:
-                attempts += 1
                 logging.error(
                     f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"
                 )
+                attempts += 1
                 time.sleep(self.delay)
 
         logging.error("Max retries exceeded. Could not connect to RabbitMQ.")
@@ -832,6 +834,44 @@ class OrderService:
                     total_amount += product["price"] * item.quantity
         return total_amount
 
+    def get_all_customers(self) -> List[CustomerEntity]:
+        return self.customer_repository.list_all()
+
+    def get_customer_by_email(self, email: str) -> Optional[CustomerEntity]:
+        return self.customer_repository.find_by_email(email)
+
+    def create_customer(self, customer: CustomerEntity) -> CustomerEntity:
+        existing_customer = self.customer_repository.find_by_email(
+            customer.email
+        )
+        if existing_customer:
+            raise EntityAlreadyExists(
+                f"Customer with email '{customer.email}' already exists."
+            )
+
+        self.customer_repository.save(customer)
+        return customer
+
+    def update_customer(
+        self, email: str, updated_customer: CustomerEntity
+    ) -> CustomerEntity:
+        customer = self.customer_repository.find_by_email(email)
+        if not customer:
+            raise EntityNotFound(f"Customer with email '{email}' not found")
+
+        customer.name = updated_customer.name
+        customer.email = updated_customer.email
+        customer.phone_number = updated_customer.phone_number
+        self.customer_repository.save(customer)
+        return customer
+
+    def delete_customer(self, email: str) -> None:
+        customer = self.customer_repository.find_by_email(email)
+        if not customer:
+            raise EntityNotFound(f"Customer with email '{email}' not found")
+
+        self.customer_repository.delete(customer)
+
 
 class HealthService:
     def __init__(self, db: Session, rabbitmq_host: str):
@@ -1157,7 +1197,7 @@ async def delete_order(
     "/customers/", tags=["Customer"], response_model=List[CustomerResponse]
 )
 async def read_customers(service: OrderService = Depends(get_order_service)):
-    customers = service.customer_repository.list_all()
+    customers = service.get_all_customers()
     return [serialize_customer(customer) for customer in customers]
 
 
@@ -1167,7 +1207,7 @@ async def read_customers(service: OrderService = Depends(get_order_service)):
 async def read_customer(
     email: str, service: OrderService = Depends(get_order_service)
 ):
-    customer = service.customer_repository.find_by_email(email)
+    customer = service.get_customer_by_email(email)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return serialize_customer(customer)
@@ -1178,13 +1218,20 @@ async def create_customer(
     customer: CustomerCreate,
     service: OrderService = Depends(get_order_service),
 ):
-    customer_entity = CustomerEntity(name=customer.name, email=customer.email)
-    service.customer_repository.save(customer_entity)
-    return serialize_customer(customer_entity)
+    customer_entity = CustomerEntity(
+        name=customer.name,
+        email=customer.email,
+        phone_number=customer.phone_number,
+    )
+    try:
+        created_customer = service.create_customer(customer_entity)
+        return serialize_customer(created_customer)
+    except EntityAlreadyExists as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put(
-    "/customers/{customer_id}",
+    "/customers/{email}",
     tags=["Customer"],
     response_model=CustomerResponse,
 )
@@ -1193,24 +1240,29 @@ async def update_customer(
     customer: CustomerCreate,
     service: OrderService = Depends(get_order_service),
 ):
-    customer_entity = service.customer_repository.find_by_email(email)
-    if not customer_entity:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    customer_entity.name = customer.name
-    customer_entity.email = customer.email
-    service.customer_repository.save(customer_entity)
-    return serialize_customer(customer_entity)
+    updated_customer_entity = CustomerEntity(
+        name=customer.name,
+        email=customer.email,
+        phone_number=customer.phone_number,
+    )
+    try:
+        updated_customer = service.update_customer(
+            email, updated_customer_entity
+        )
+        return serialize_customer(updated_customer)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.delete("/customers/", tags=["Customer"], status_code=204)
 async def delete_customer(
     email: str, service: OrderService = Depends(get_order_service)
 ):
-    customer_entity = service.customer_repository.find_by_email(email)
-    if not customer_entity:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    service.customer_repository.delete(customer_entity)
-    return {"message": "Customer deleted successfully"}
+    try:
+        service.delete_customer(email)
+        return {"message": "Customer deleted successfully"}
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.get("/health", tags=["Health"])
