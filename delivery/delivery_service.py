@@ -17,7 +17,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
 from sqlalchemy.sql import text  # Import the text function
 
-app = FastAPI()
+app = FastAPI(root_path="/delivery")
 
 # Database Configuration
 DATABASE_URL = "sqlite:///./data/deliveries.db"

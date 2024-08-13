@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 
-app = FastAPI()
+app = FastAPI(root_path="/payments")
 
 # MongoDB setup
 MONGO_HOST = os.getenv("MONGO_HOST", "mongo")

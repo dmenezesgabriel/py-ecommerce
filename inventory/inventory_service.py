@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, relationship, sessionmaker
 from sqlalchemy.sql import text
 
 # Setup FastAPI
-app = FastAPI()
+app = FastAPI(root_path="/inventory")
 
 # Database Configuration
 DATABASE_URL = "sqlite:///./data/inventory.db"

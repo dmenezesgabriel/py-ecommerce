@@ -10,7 +10,6 @@ services:
       - name: inventory-route
         paths:
           - /inventory
-        strip_path: true
 
   - name: orders-service
     host: orders_service
@@ -20,7 +19,6 @@ services:
       - name: orders-route
         paths:
           - /orders
-        strip_path: true
 
   - name: payments-service
     host: payments_service
@@ -30,7 +28,6 @@ services:
       - name: payments-route
         paths:
           - /payments
-        strip_path: true
 
   - name: delivery-service
     host: delivery_service
@@ -40,4 +37,3 @@ services:
       - name: delivery-route
         paths:
           - /delivery
-        strip_path: true

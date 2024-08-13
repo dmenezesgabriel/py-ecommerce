@@ -86,3 +86,7 @@ delivery_service/
 ├── main.py
 └── requirements.txt
 ```
+
+So kong works with fastapi
+
+- https://fastapi.tiangolo.com/advanced/behind-a-proxy/#providing-the-root_path
