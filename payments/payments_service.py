@@ -216,7 +216,9 @@ class HealthService:
     def check_rabbitmq(self) -> bool:
         try:
             connection = pika.BlockingConnection(
-                pika.ConnectionParameters(host=self.rabbitmq_host)
+                pika.ConnectionParameters(
+                    host=self.rabbitmq_host, heartbeat=120
+                )
             )
             connection.close()
             return True
@@ -355,7 +357,9 @@ class OrderSubscriber(BaseMessagingAdapter):
         self, payment_service: PaymentService, max_retries=5, delay=5
     ):
         self.payment_service = payment_service
-        connection_params = pika.ConnectionParameters(host="rabbitmq")
+        connection_params = pika.ConnectionParameters(
+            host="rabbitmq", heartbeat=120
+        )
         super().__init__(connection_params, max_retries, delay)
 
     def start_consuming(self):
@@ -429,7 +433,9 @@ def get_payment_service() -> PaymentService:
 
 
 def get_payment_publisher() -> PaymentPublisher:
-    connection_params = pika.ConnectionParameters(host="rabbitmq")
+    connection_params = pika.ConnectionParameters(
+        host="rabbitmq", heartbeat=120
+    )
     return PaymentPublisher(connection_params)
 
 

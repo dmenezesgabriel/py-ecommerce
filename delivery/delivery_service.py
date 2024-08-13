@@ -678,7 +678,9 @@ class HealthService:
     def check_rabbitmq(self) -> bool:
         try:
             connection = pika.BlockingConnection(
-                pika.ConnectionParameters(host=self.rabbitmq_host)
+                pika.ConnectionParameters(
+                    host=self.rabbitmq_host, heartbeat=120
+                )
             )
             connection.close()
             return True
@@ -719,7 +721,9 @@ def get_health_service(
 def get_delivery_service(
     db: Session = Depends(get_db),
     delivery_publisher: DeliveryPublisher = Depends(
-        lambda: DeliveryPublisher(pika.ConnectionParameters(host="rabbitmq"))
+        lambda: DeliveryPublisher(
+            pika.ConnectionParameters(host="rabbitmq", heartbeat=120)
+        )
     ),
     order_verification_service: OrderVerificationService = Depends(
         OrderVerificationService

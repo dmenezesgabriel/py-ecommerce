@@ -252,7 +252,9 @@ class HealthService:
     def check_rabbitmq(self) -> bool:
         try:
             connection = pika.BlockingConnection(
-                pika.ConnectionParameters(host=self.rabbitmq_host)
+                pika.ConnectionParameters(
+                    host=self.rabbitmq_host, heartbeat=120
+                )
             )
             connection.close()
             return True
@@ -524,7 +526,9 @@ class InventorySubscriber:
         delay: int = 5,
     ):
         self.product_service = product_service
-        self.connection_params = pika.ConnectionParameters(host="rabbitmq")
+        self.connection_params = pika.ConnectionParameters(
+            host="rabbitmq", heartbeat=120
+        )
         self.max_retries = max_retries
         self.delay = delay
 

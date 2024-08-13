@@ -890,7 +890,9 @@ class HealthService:
     def check_rabbitmq(self) -> bool:
         try:
             connection = pika.BlockingConnection(
-                pika.ConnectionParameters(host=self.rabbitmq_host)
+                pika.ConnectionParameters(
+                    host=self.rabbitmq_host, heartbeat=120
+                )
             )
             connection.close()
             return True
@@ -924,7 +926,9 @@ def on_startup():
         inventory_publisher,
         order_update_publisher,
     )
-    connection_params = pika.ConnectionParameters(host="rabbitmq")
+    connection_params = pika.ConnectionParameters(
+        host="rabbitmq", heartbeat=120
+    )
     payment_subscriber = PaymentSubscriber(order_service, connection_params)
     delivery_subscriber = DeliverySubscriber(order_service, connection_params)
     threading.Thread(target=payment_subscriber.start_consuming).start()
@@ -946,12 +950,16 @@ def get_health_service(
 
 
 def get_inventory_publisher() -> InventoryPublisher:
-    connection_params = pika.ConnectionParameters(host="rabbitmq")
+    connection_params = pika.ConnectionParameters(
+        host="rabbitmq", heartbeat=120
+    )
     return InventoryPublisher(connection_params)
 
 
 def get_order_update_publisher() -> OrderUpdatePublisher:
-    connection_params = pika.ConnectionParameters(host="rabbitmq")
+    connection_params = pika.ConnectionParameters(
+        host="rabbitmq", heartbeat=120
+    )
     return OrderUpdatePublisher(connection_params)
 
 
