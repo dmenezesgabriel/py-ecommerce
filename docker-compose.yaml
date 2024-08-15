@@ -197,8 +197,8 @@ services:
       - ./conf/kong/kong.yml:/kong/declarative/kong.yml
     networks:
       - ecommerce_network
-    depends_on:
-      - kong-migrations
+    # depends_on:
+    #   - kong-migrations
 
 networks:
   ecommerce_network:

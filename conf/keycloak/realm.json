@@ -8,7 +8,26 @@
   "editUsernameAllowed": true,
   "registrationEmailAsUsername": false,
   "users": [],
-  "clients": [],
+  "clients": [
+    {
+      "clientId": "kong",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "your-client-secret",
+      "redirectUris": ["http://localhost:8100/*"],
+      "webOrigins": [],
+      "publicClient": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": true,
+      "consentRequired": false,
+      "defaultClientScopes": ["web-origins", "role_list", "profile", "email"],
+      "optionalClientScopes": ["address", "phone"]
+    }
+  ],
   "roles": {
     "realm": [],
     "client": {}
