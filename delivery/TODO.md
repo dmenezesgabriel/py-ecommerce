@@ -2,3 +2,5 @@
 - [] IDs to UUID
 - [] Entity validations to static methods
 - [] Instead of rabbitmq in health check make generic like broker
+- [] Refactor tests to use pytest instead of unittest case, pytest + unittes.mock
+- [] Separate addres dto from delivery

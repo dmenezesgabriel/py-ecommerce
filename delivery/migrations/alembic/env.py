@@ -1,18 +1,16 @@
-import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from src.config import Config
 from src.infrastructure.persistence.db_setup import Base
 from src.infrastructure.persistence.models import *
 
-DATABASE_HOST = os.getenv("DATABASE_HOST")
-DATABASE_PORT = os.getenv("DATABASE_PORT")
-DATABASE_NAME = os.getenv("DATABASE_NAME")
-DATABASE_USER = os.getenv("DATABASE_USER")
-DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD")
-DATABASE_URL = f"postgresql://{DATABASE_USER}:{DATABASE_PASSWORD}"
-DATABASE_URL += f"@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}"
+DATABASE_URL = "postgresql://"
+DATABASE_URL += f"{Config.DATABASE_USER}:{Config.DATABASE_PASSWORD}"
+DATABASE_URL += f"@{Config.DATABASE_HOST}:{Config.DATABASE_PORT}/"
+DATABASE_URL += f"{Config.DATABASE_NAME}"
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -1,14 +1,11 @@
 import asyncio
-import logging
-import os
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.application.services.order_verification_service import (
     OrderVerificationService,
 )
-
-logger = logging.getLogger()
+from src.config import Config
 
 
 class TestOrderVerificationService(unittest.TestCase):
@@ -16,8 +13,8 @@ class TestOrderVerificationService(unittest.TestCase):
         self.order_verification_service = OrderVerificationService()
         self.valid_order_id = 123
         self.invalid_order_id = 999
-        os.environ["ORDER_SERVICE_BASE_URL"] = "http://test-url"
 
+    @patch.object(Config, "ORDER_SERVICE_BASE_URL", "http://test-url")
     @patch("aiohttp.ClientSession")
     def test_verify_order_success(self, mock_client_session):
         # Arrange
@@ -38,6 +35,7 @@ class TestOrderVerificationService(unittest.TestCase):
         get = mock_client_session.return_value.__aenter__.return_value.get
         get.assert_called_once_with(f"http://test-url/{self.valid_order_id}")
 
+    @patch.object(Config, "ORDER_SERVICE_BASE_URL", "http://test-url")
     @patch("aiohttp.ClientSession")
     def test_verify_order_canceled(self, mock_client_session):
         # Arrange
@@ -58,6 +56,7 @@ class TestOrderVerificationService(unittest.TestCase):
         get = mock_client_session.return_value.__aenter__.return_value.get
         get.assert_called_once_with(f"http://test-url/{self.valid_order_id}")
 
+    @patch.object(Config, "ORDER_SERVICE_BASE_URL", "http://test-url")
     @patch("aiohttp.ClientSession")
     def test_verify_order_not_found(self, mock_client_session):
         # Arrange
@@ -77,6 +76,7 @@ class TestOrderVerificationService(unittest.TestCase):
         get = mock_client_session.return_value.__aenter__.return_value.get
         get.assert_called_once_with(f"http://test-url/{self.invalid_order_id}")
 
+    @patch.object(Config, "ORDER_SERVICE_BASE_URL", "http://test-url")
     @patch("aiohttp.ClientSession")
     def test_verify_order_exception(self, mock_client_session):
         # Arrange

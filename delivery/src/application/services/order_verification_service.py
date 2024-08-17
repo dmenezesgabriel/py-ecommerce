@@ -1,7 +1,7 @@
 import logging
-import os
 
 import aiohttp
+from src.config import Config
 
 logger = logging.getLogger()
 
@@ -11,7 +11,7 @@ class OrderVerificationService:
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get(
-                    f"{os.getenv('ORDER_SERVICE_BASE_URL')}/{order_id}"
+                    f"{Config.ORDER_SERVICE_BASE_URL}/{order_id}"
                 ) as response:
                     if response.status == 200:
                         order = await response.json()
