@@ -457,15 +457,55 @@ class PaymentCreate(BaseModel):
     amount: float
     status: PaymentStatus
 
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "order_id": 1,
+                    "amount": 100.00,
+                    "status": "pending",
+                },
+                {
+                    "order_id": 2,
+                    "amount": 250.75,
+                    "status": "completed",
+                },
+            ]
+        }
+
 
 class PaymentUpdate(BaseModel):
     order_id: int
     amount: float
     status: PaymentStatus
 
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "order_id": 1,
+                    "amount": 100.00,
+                    "status": "completed",
+                },
+                {
+                    "order_id": 2,
+                    "amount": 250.75,
+                    "status": "failed",
+                },
+            ]
+        }
+
 
 class PaymentStatusUpdate(BaseModel):
     status: PaymentStatus
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {"status": "completed"},
+                {"status": "canceled"},
+            ]
+        }
 
 
 class PaymentResponse(BaseModel):
@@ -475,9 +515,25 @@ class PaymentResponse(BaseModel):
     status: PaymentStatus
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         json_encoders = {
             ObjectId: str,
+        }
+        json_schema_extra = {
+            "examples": [
+                {
+                    "id": "64c8cbe2f3a5e9a1c4b63e29",
+                    "order_id": 1,
+                    "amount": 100.00,
+                    "status": "completed",
+                },
+                {
+                    "id": "64c8cbe2f3a5e9a1c4b63e30",
+                    "order_id": 2,
+                    "amount": 250.75,
+                    "status": "pending",
+                },
+            ]
         }
 
 

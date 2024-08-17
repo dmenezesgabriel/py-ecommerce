@@ -80,7 +80,7 @@ services:
       - ./delivery:/app
     networks:
       - ecommerce_network
-    command: uvicorn delivery_service:app --host 0.0.0.0 --port 8004 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8004 --reload
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8004/health || exit 1"]
       interval: 30s
@@ -199,6 +199,16 @@ services:
       - ecommerce_network
     # depends_on:
     #   - kong-migrations
+
+  bdd:
+    build:
+      context: ./bdd
+      dockerfile: Dockerfile.bdd
+    volumes:
+      - ./bdd:/app/
+    command: behave
+    networks:
+      - ecommerce_network
 
 networks:
   ecommerce_network:

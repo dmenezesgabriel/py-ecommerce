@@ -8,8 +8,14 @@ from typing import List, Optional
 import pika
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import (Column, Float, ForeignKey, Integer, String,
-                        create_engine)
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    create_engine,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
 from sqlalchemy.sql import text
@@ -630,12 +636,37 @@ class ProductCreate(BaseModel):
     price: float
     quantity: int
 
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "sku": "123",
+                    "name": "Potato Sauce",
+                    "category_name": "Food",
+                    "price": 1.50,
+                    "quantity": 100,
+                }
+            ]
+        }
+
 
 class ProductUpdate(BaseModel):
     name: str
     category_name: str
     price: float
     quantity: int
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "name": "Potato Sauce",
+                    "category_name": "Food",
+                    "price": 1.50,
+                    "quantity": 150,
+                }
+            ]
+        }
 
 
 class ProductResponse(BaseModel):
@@ -645,18 +676,69 @@ class ProductResponse(BaseModel):
     price: float
     quantity: int
 
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "sku": "123",
+                    "name": "Potato Sauce",
+                    "category_name": "Food",
+                    "price": 1.50,
+                    "quantity": 100,
+                }
+            ]
+        }
+
 
 class CategoryCreate(BaseModel):
     name: str
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "name": "Food",
+                },
+                {
+                    "name": "Electronics",
+                },
+            ]
+        }
 
 
 class CategoryResponse(BaseModel):
     id: int
     name: str
 
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "id": 1,
+                    "name": "Food",
+                },
+                {
+                    "id": 2,
+                    "name": "Electronics",
+                },
+            ]
+        }
+
 
 class InventoryUpdate(BaseModel):
     quantity: int
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "quantity": 50,
+                },
+                {
+                    "quantity": 200,
+                },
+            ]
+        }
 
 
 @app.post("/products/", tags=["Product"], response_model=ProductResponse)

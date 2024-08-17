@@ -987,7 +987,7 @@ class OrderItemCreate(BaseModel):
 
     class Config:
         json_schema_extra = {
-            "examples": [{"product_sku": "ABC123", "quantity": 2}]
+            "examples": [{"product_sku": "123", "quantity": 2}]
         }
 
 
@@ -1003,7 +1003,12 @@ class CustomerCreate(BaseModel):
                     "name": "John Doe",
                     "email": "john.doe@example.com",
                     "phone_number": "+123456789",
-                }
+                },
+                {
+                    "name": "Jane Smith",
+                    "email": "jane.smith@example.com",
+                    "phone_number": None,
+                },
             ]
         }
 
@@ -1025,7 +1030,17 @@ class OrderCreate(BaseModel):
                         {"product_sku": "ABC123", "quantity": 2},
                         {"product_sku": "XYZ456", "quantity": 1},
                     ],
-                }
+                },
+                {
+                    "customer": {
+                        "name": "Jane Smith",
+                        "email": "jane.smith@example.com",
+                        "phone_number": None,
+                    },
+                    "order_items": [
+                        {"product_sku": "LMN789", "quantity": 3},
+                    ],
+                },
             ]
         }
 
@@ -1035,7 +1050,19 @@ class OrderItemResponse(BaseModel):
     quantity: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+        json_schema_extra = {
+            "examples": [
+                {
+                    "product_sku": "ABC123",
+                    "quantity": 2,
+                },
+                {
+                    "product_sku": "XYZ456",
+                    "quantity": 1,
+                },
+            ]
+        }
 
 
 class CustomerResponse(BaseModel):
@@ -1045,7 +1072,23 @@ class CustomerResponse(BaseModel):
     phone_number: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+        json_schema_extra = {
+            "examples": [
+                {
+                    "id": 1,
+                    "name": "John Doe",
+                    "email": "john.doe@example.com",
+                    "phone_number": "+123456789",
+                },
+                {
+                    "id": 2,
+                    "name": "Jane Smith",
+                    "email": "jane.smith@example.com",
+                    "phone_number": None,
+                },
+            ]
+        }
 
 
 class OrderResponse(BaseModel):
@@ -1057,11 +1100,43 @@ class OrderResponse(BaseModel):
     total_amount: float
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+        json_schema_extra = {
+            "examples": [
+                {
+                    "id": 1,
+                    "order_number": "ORD123",
+                    "customer": {
+                        "id": 1,
+                        "name": "John Doe",
+                        "email": "john.doe@example.com",
+                        "phone_number": "+123456789",
+                    },
+                    "order_items": [
+                        {"product_sku": "ABC123", "quantity": 2},
+                        {"product_sku": "XYZ456", "quantity": 1},
+                    ],
+                    "status": "confirmed",
+                    "total_amount": 30.00,
+                }
+            ]
+        }
 
 
 class OrderStatusUpdate(BaseModel):
     status: OrderStatus
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "status": "confirmed",
+                },
+                {
+                    "status": "paid",
+                },
+            ]
+        }
 
 
 @app.post("/orders/", tags=["Orders"], response_model=OrderResponse)
