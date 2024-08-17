@@ -9,8 +9,8 @@ class AddressCreate(BaseModel):
     country: str
     zip_code: str
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "city": "New York",
@@ -26,6 +26,7 @@ class AddressCreate(BaseModel):
                 },
             ]
         }
+    }
 
 
 class DeliveryCreate(BaseModel):
@@ -36,8 +37,8 @@ class DeliveryCreate(BaseModel):
     address: AddressCreate
     customer: CustomerCreate
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "order_id": 123,
@@ -58,18 +59,20 @@ class DeliveryCreate(BaseModel):
                 }
             ]
         }
+    }
 
 
 class DeliveryStatusUpdate(BaseModel):
     status: DeliveryStatus
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {"status": "in_transit"},
                 {"status": "delivered"},
             ]
         }
+    }
 
 
 class AddressResponse(BaseModel):
@@ -79,9 +82,9 @@ class AddressResponse(BaseModel):
     country: str
     zip_code: str
 
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = {
+        "from_attributes": True,
+        "json_schema_extra": {
             "examples": [
                 {
                     "id": 1,
@@ -98,7 +101,8 @@ class AddressResponse(BaseModel):
                     "zip_code": "90001",
                 },
             ]
-        }
+        },
+    }
 
 
 class DeliveryResponse(BaseModel):
@@ -110,9 +114,9 @@ class DeliveryResponse(BaseModel):
     address: AddressResponse
     customer: CustomerResponse
 
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = {
+        "from_attributes": True,
+        "json_schema_extra": {
             "examples": [
                 {
                     "id": 1,
@@ -135,4 +139,5 @@ class DeliveryResponse(BaseModel):
                     },
                 }
             ]
-        }
+        },
+    }

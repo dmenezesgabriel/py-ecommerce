@@ -81,6 +81,13 @@ services:
     networks:
       - ecommerce_network
     command: uvicorn main:app --host 0.0.0.0 --port 8004 --reload
+    environment:
+      ORDER_SERVICE_BASE_URL: "http://orders_service:8002/orders/"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: delivery
+      DATABASE_USER: delivery_app
+      DATABASE_PASSWORD: 123abc
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8004/health || exit 1"]
       interval: 30s

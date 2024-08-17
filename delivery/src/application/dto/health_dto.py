@@ -5,8 +5,8 @@ class HealthResponse(BaseModel):
     database: str
     rabbitmq: str
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "database": "healthy",
@@ -14,3 +14,4 @@ class HealthResponse(BaseModel):
                 },
             ]
         }
+    }

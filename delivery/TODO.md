@@ -1,2 +1,4 @@
 - [] Delivery Publisher port
 - [] IDs to UUID
+- [] Entity validations to static methods
+- [] Instead of rabbitmq in health check make generic like broker

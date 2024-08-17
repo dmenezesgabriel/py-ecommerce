@@ -1,0 +1,48 @@
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - .:/app/
+    command: |
+      python -m pytest tests -s -vv -x --cov . --cov-report=html:/app/reports/coverage --alluredir /app/allure-results
+    environment:
+      ORDER_SERVICE_BASE_URL: "http://orders_service:8002/orders/"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: delivery
+      DATABASE_USER: delivery_app
+      DATABASE_PASSWORD: 123abc
+
+  rabbitmq:
+    hostname: rabbitmq
+    image: rabbitmq:3-management-alpine
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - ./conf/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./conf/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    networks:
+      - delivery_network
+
+  allure:
+    build:
+      context: .
+      dockerfile: Dockerfile.allure
+    volumes:
+      - .:/app/
+    ports:
+      - "35741:35741"
+
+networks:
+  delivery_network:
+    driver: bridge
+
+volumes:
+  postgres_delivery:
+  mongo_delivery:
