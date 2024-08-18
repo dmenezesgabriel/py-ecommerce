@@ -4,6 +4,9 @@ import socket
 import time
 
 import pika
+from pika.adapters.blocking_connection import BlockingChannel
+from pika.spec import Basic
+
 from src.application.services.product_service import ProductService
 from src.config import Config
 
@@ -24,7 +27,7 @@ class InventorySubscriber:
         self.max_retries = max_retries
         self.delay = delay
 
-    def connect(self):
+    def connect(self) -> bool:
         attempts = 0
         while attempts < self.max_retries:
             try:
@@ -43,7 +46,7 @@ class InventorySubscriber:
         logger.error("Max retries exceeded. Could not connect to RabbitMQ.")
         return False
 
-    def start_consuming(self):
+    def start_consuming(self) -> None:
         if not self.connect():
             logger.error("Failed to start consuming. Exiting.")
             return
@@ -67,7 +70,13 @@ class InventorySubscriber:
         logger.info("Starting to consume messages from inventory_queue.")
         self.channel.start_consuming()
 
-    def on_message(self, ch, method, properties, body):
+    def on_message(
+        self,
+        ch: BlockingChannel,
+        method: Basic.Deliver,
+        properties: Basic,
+        body: bytes,
+    ) -> None:
         logger.info(f"Received message from inventory_queue: {body}")
         try:
             data = json.loads(body.decode("utf-8"))

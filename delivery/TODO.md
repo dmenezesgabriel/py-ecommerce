@@ -8,3 +8,4 @@
 - [] Add integration tests
 - [] Add behaviour tests
 - [] Add Contract tests
+- [] Refactor entity validation methods to a separated function

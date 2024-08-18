@@ -68,6 +68,8 @@ class SQLAlchemyProductRepository(ProductRepository):
                 .filter(CategoryModel.id == db_product.category_id)
                 .first()
             )
+            print(category)
+            print(category.id)
             return ProductEntity(
                 id=db_product.id,
                 sku=db_product.sku,

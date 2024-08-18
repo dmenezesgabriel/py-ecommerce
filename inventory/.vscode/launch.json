@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Pytest",
+      "request": "launch",
+      "module": "pytest",
+      "console": "integratedTerminal",
+      "env": {
+        "ENVIRONMENT": "test",
+        "BROKER_HOST": "rabbitmq",
+        "DATABASE_HOST": "postgres",
+        "DATABASE_PORT": "5432",
+        "DATABASE_NAME": "inventory",
+        "DATABASE_USER": "inventory_app",
+        "DATABASE_PASSWORD": "123abc"
+      }
+    }
+  ]
+}
