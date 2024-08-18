@@ -13,8 +13,8 @@ class OrderCreate(BaseModel):
     customer: CustomerCreate
     order_items: List[OrderItemCreate] = []
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "customer": {
@@ -39,13 +39,14 @@ class OrderCreate(BaseModel):
                 },
             ]
         }
+    }
 
 
 class OrderStatusUpdate(BaseModel):
     status: OrderStatus
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "status": "confirmed",
@@ -55,6 +56,7 @@ class OrderStatusUpdate(BaseModel):
                 },
             ]
         }
+    }
 
 
 class OrderResponse(BaseModel):
@@ -65,9 +67,9 @@ class OrderResponse(BaseModel):
     status: OrderStatus
     total_amount: float
 
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = {
+        "from_attributes": True,
+        "json_schema_extra": {
             "examples": [
                 {
                     "id": 1,
@@ -86,4 +88,5 @@ class OrderResponse(BaseModel):
                     "total_amount": 30.00,
                 }
             ]
-        }
+        },
+    }

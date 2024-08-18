@@ -5,27 +5,23 @@ class OrderItemCreate(BaseModel):
     product_sku: str
     quantity: int
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [{"product_sku": "123", "quantity": 2}]
         }
+    }
 
 
 class OrderItemResponse(BaseModel):
     product_sku: str
     quantity: int
 
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = {
+        "from_attributes": True,
+        "json_schema_extra": {
             "examples": [
-                {
-                    "product_sku": "ABC123",
-                    "quantity": 2,
-                },
-                {
-                    "product_sku": "XYZ456",
-                    "quantity": 1,
-                },
+                {"product_sku": "ABC123", "quantity": 2},
+                {"product_sku": "XYZ456", "quantity": 1},
             ]
-        }
+        },
+    }
