@@ -17,7 +17,7 @@ services:
       - ./inventory:/app
     networks:
       - ecommerce_network
-    command: uvicorn inventory_service:app --host 0.0.0.0 --port 8001 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
     environment:
       BROKER_HOST: rabbitmq
       DATABASE_HOST: postgres
@@ -45,7 +45,15 @@ services:
       - ./orders:/app
     networks:
       - ecommerce_network
-    command: uvicorn orders_service:app --host 0.0.0.0 --port 8002 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8002 --reload
+    environment:
+      INVENTORY_SERVICE_BASE_URL: "http://inventory_service:8001/inventory"
+      BROKER_HOST: rabbitmq
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: order
+      DATABASE_USER: order_app
+      DATABASE_PASSWORD: 123abc
     depends_on:
       - rabbitmq
     healthcheck:
@@ -89,7 +97,7 @@ services:
       - ecommerce_network
     command: uvicorn main:app --host 0.0.0.0 --port 8004 --reload
     environment:
-      ORDER_SERVICE_BASE_URL: "http://orders_service:8002/orders/"
+      ORDER_SERVICE_BASE_URL: "http://orders_service:8002/orders"
       BROKER_HOST: rabbitmq
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432

@@ -5,7 +5,7 @@ import time
 
 import pika
 
-logger = logging.getLogger()
+logger = logging.getLogger("app")
 
 
 class DeliveryPublisher:

@@ -6,11 +6,10 @@ import time
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.spec import Basic
-
 from src.application.services.product_service import ProductService
 from src.config import Config
 
-logger = logging.getLogger()
+logger = logging.getLogger("app")
 
 
 class InventorySubscriber:

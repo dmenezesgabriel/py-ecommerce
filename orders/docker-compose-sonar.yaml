@@ -1,0 +1,34 @@
+services:
+  sonarqube:
+    image: sonarqube:latest
+    container_name: sonarqube
+    ports:
+      - "9000:9000"
+    environment:
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+    volumes:
+      - sonarqube_orders_conf:/opt/sonarqube/conf
+      - sonarqube_orders_data:/opt/sonarqube/data
+      - sonarqube_orders_logs:/opt/sonarqube/logs
+      - sonarqube_orders_extensions:/opt/sonarqube/extensions
+
+  sonar-scanner:
+    image: sonarsource/sonar-scanner-cli:latest
+    container_name: sonar-scanner
+    volumes:
+      - .:/usr/app
+      - ./sonar-scanner/conf:/opt/sonar-scanner/conf
+    command:
+      [
+        "sonar-scanner",
+        "-Dsonar.projectBaseDir=/usr/app",
+        "-Dsonar.host.url=http://sonarqube:9000",
+        "-Dsonar.login=admin",
+        "-Dsonar.password=1234",
+      ]
+
+volumes:
+  sonarqube_orders_conf:
+  sonarqube_orders_data:
+  sonarqube_orders_logs:
+  sonarqube_orders_extensions:

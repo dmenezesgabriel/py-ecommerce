@@ -32,7 +32,7 @@ db = client[MONGO_DB]
 payments_collection = db["payments"]
 
 # Set up logging
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app")
 logger.setLevel(logging.INFO)
 
 console_handler = logging.StreamHandler()

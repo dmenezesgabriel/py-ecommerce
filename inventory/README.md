@@ -1,4 +1,4 @@
-## Invetory Service
+## Inventory Service
 
 ## Ports and Adapters
 

@@ -4,7 +4,7 @@ import pika
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import text
 
-logger = logging.getLogger()
+logger = logging.getLogger("app")
 
 
 class HealthService:

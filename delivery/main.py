@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from src.adapters.api import customer_api, delivery_api, health_api
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app")
 logger.setLevel(logging.INFO)
 
 console_handler = logging.StreamHandler()

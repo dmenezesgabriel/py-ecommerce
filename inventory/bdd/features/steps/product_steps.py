@@ -7,7 +7,7 @@ import requests
 from behave import given, then, when
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+logger = logging.getLogger("app")
 
 BASE_URL = os.getenv("BASE_URL")
 
