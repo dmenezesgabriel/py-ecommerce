@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
@@ -13,12 +14,15 @@ from src.infrastructure.persistence.models import (
     ProductModel,
 )
 
+logger = logging.getLogger("app")
+
 
 class SQLAlchemyProductRepository(ProductRepository):
     def __init__(self, db: Session):
         self.db = db
 
-    def save(self, product: ProductEntity):
+    def save(self, product: ProductEntity) -> ProductEntity:
+
         category_model = (
             self.db.query(CategoryModel)
             .filter(CategoryModel.name == product.category.name)
@@ -46,6 +50,8 @@ class SQLAlchemyProductRepository(ProductRepository):
             self.db.commit()
             self.db.refresh(db_product)
 
+        db_product.name = product.name
+        db_product.category = category_model
         db_product.price = PriceModel(
             product_id=db_product.id, amount=product.price.amount
         )
@@ -57,6 +63,21 @@ class SQLAlchemyProductRepository(ProductRepository):
         self.db.add(db_product.inventory)
         self.db.commit()
         self.db.refresh(db_product)
+        return ProductEntity(
+            id=db_product.id,
+            sku=db_product.sku,
+            name=db_product.name,
+            category=CategoryEntity(
+                name=db_product.category.name, id=db_product.category.id
+            ),
+            inventory=InventoryEntity(
+                id=db_product.inventory.id,
+                quantity=db_product.inventory.quantity,
+            ),
+            price=PriceEntity(
+                id=db_product.price.id, amount=db_product.price.amount
+            ),
+        )
 
     def find_by_sku(self, sku: str) -> Optional[ProductEntity]:
         db_product = (
@@ -68,8 +89,6 @@ class SQLAlchemyProductRepository(ProductRepository):
                 .filter(CategoryModel.id == db_product.category_id)
                 .first()
             )
-            print(category)
-            print(category.id)
             return ProductEntity(
                 id=db_product.id,
                 sku=db_product.sku,

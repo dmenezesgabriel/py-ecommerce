@@ -18,5 +18,10 @@ unit-tests:
 allure:
 	docker compose -f docker-compose-test.yaml up -d allure
 
+
+bdd-tests:
+	docker compose -f docker-compose-test.yaml run --rm bdd
+
+
 sonar-scan:
 	docker compose -f docker-compose-sonar.yaml run --rm sonar-scanner

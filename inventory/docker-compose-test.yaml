@@ -1,3 +1,6 @@
+include:
+  - docker-compose.yaml
+
 services:
   tests:
     build:
@@ -15,20 +18,16 @@ services:
       DATABASE_USER: inventory_app
       DATABASE_PASSWORD: 123abc
 
-  rabbitmq:
-    hostname: rabbitmq
-    image: rabbitmq:3-management-alpine
-    ports:
-      - 5672:5672
-      - 15672:15672
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+  bdd:
+    build:
+      context: ./bdd
     volumes:
-      - ./conf/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-      - ./conf/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./bdd:/app/
+    command: behave
     networks:
       - inventory_network
+    environment:
+      BASE_URL: http://inventory_service:8001
 
   allure:
     build:

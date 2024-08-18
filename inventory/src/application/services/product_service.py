@@ -5,10 +5,16 @@ from src.domain.entities.inventory_entity import InventoryEntity
 from src.domain.entities.price_entity import PriceEntity
 from src.domain.entities.product_entity import ProductEntity
 from src.domain.exceptions import EntityAlreadyExists, EntityNotFound
+from src.domain.repositories.category_repository import CategoryRepository
+from src.domain.repositories.product_repository import ProductRepository
 
 
 class ProductService:
-    def __init__(self, product_repository, category_repository):
+    def __init__(
+        self,
+        product_repository: ProductRepository,
+        category_repository: CategoryRepository,
+    ):
         self.product_repository = product_repository
         self.category_repository = category_repository
 
@@ -36,8 +42,8 @@ class ProductService:
         product = ProductEntity(
             sku, name, category, price_entity, inventory_entity
         )
-        self.product_repository.save(product)
-        return product
+        new_product = self.product_repository.save(product)
+        return new_product
 
     def get_product_by_sku(self, sku: str) -> ProductEntity:
         product = self.product_repository.find_by_sku(sku)
@@ -66,8 +72,8 @@ class ProductService:
         product.category = category
         product.set_price(price)
         product.set_inventory(quantity)
-        self.product_repository.save(product)
-        return product
+        updated_product = self.product_repository.save(product)
+        return updated_product
 
     def delete_product(self, sku: str) -> ProductEntity:
         product = self.product_repository.find_by_sku(sku)

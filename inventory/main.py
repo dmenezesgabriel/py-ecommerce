@@ -21,7 +21,7 @@ from src.infrastructure.persistence.sqlalchemy_product_repository import (
     SQLAlchemyProductRepository,
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app")
 logger.setLevel(logging.INFO)
 
 console_handler = logging.StreamHandler()

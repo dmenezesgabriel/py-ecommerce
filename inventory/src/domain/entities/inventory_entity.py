@@ -31,22 +31,22 @@ class InventoryEntity:
         self._quantity = value
 
     def set_quantity(self, amount: int):
-        self.quantity = (
-            amount  # This will use the setter method, ensuring validation
-        )
+        self.quantity = amount
 
     def _validate_id(self, id_value: Optional[int]):
         if id_value is not None and (
             not isinstance(id_value, int) or id_value <= 0
         ):
             raise InvalidEntity(
-                f"Invalid id: {id_value}. ID must be a positive integer or None."
+                f"Invalid id: {id_value}. "
+                "ID must be a positive integer or None."
             )
 
     def _validate_quantity(self, quantity_value: int):
         if not isinstance(quantity_value, int) or quantity_value < 0:
             raise InvalidEntity(
-                f"Invalid quantity: {quantity_value}. Quantity must be a non-negative integer."
+                f"Invalid quantity: {quantity_value}. "
+                "Quantity must be a non-negative integer."
             )
 
     def to_dict(self) -> dict:
