@@ -3,6 +3,8 @@ from unittest.mock import Mock
 import pytest
 from src.application.services.product_service import ProductService
 from src.domain.entities.category_entity import CategoryEntity
+from src.domain.entities.inventory_entity import InventoryEntity
+from src.domain.entities.price_entity import PriceEntity
 from src.domain.entities.product_entity import ProductEntity
 from src.domain.exceptions import EntityAlreadyExists, EntityNotFound
 from src.domain.repositories.category_repository import CategoryRepository
@@ -17,6 +19,13 @@ class TestProductService:
         product_repo = Mock(spec=ProductRepository)
         category_repo.find_by_name.return_value = None
         product_repo.find_by_sku.return_value = None
+        product_repo.save.return_value = ProductEntity(
+            sku="123",
+            name="Potato Sauce",
+            category=CategoryEntity(name="Food"),
+            price=PriceEntity(amount=1.50),
+            inventory=InventoryEntity(quantity=100),
+        )
         service = ProductService(product_repo, category_repo)
 
         # Act
@@ -83,6 +92,13 @@ class TestProductService:
         product = Mock(spec=ProductEntity)
         product_repo.find_by_sku.return_value = product
         category_repo.find_by_name.return_value = category
+        product_repo.save.return_value = ProductEntity(
+            sku="123",
+            name="Tomato Sauce",
+            category=CategoryEntity(name="Food"),
+            price=PriceEntity(amount=2.00),
+            inventory=InventoryEntity(quantity=150),
+        )
         service = ProductService(product_repo, category_repo)
 
         # Act
@@ -95,7 +111,11 @@ class TestProductService:
         )
 
         # Assert
-        assert result == product
+        assert isinstance(result, ProductEntity)
+        assert result.name == "Tomato Sauce"
+        assert result.category.name == "Food"
+        assert result.price.amount == 2.00
+        assert result.inventory.quantity == 150
         product_repo.save.assert_called_once()
         assert product.set_price.call_count == 1
         assert product.set_inventory.call_count == 1

@@ -18,7 +18,25 @@ from src.infrastructure.persistence.sqlalchemy_product_repository import (
 
 class TestSQLAlchemyProductRepository:
 
-    def test_save_new_product(self):
+    @patch(
+        "src.infrastructure.persistence.sqlalchemy_product_repository.CategoryModel"
+    )
+    @patch(
+        "src.infrastructure.persistence.sqlalchemy_product_repository.ProductModel"
+    )
+    @patch(
+        "src.infrastructure.persistence.sqlalchemy_product_repository.PriceModel"
+    )
+    @patch(
+        "src.infrastructure.persistence.sqlalchemy_product_repository.InventoryModel"
+    )
+    def test_save_new_product(
+        self,
+        MockInventoryModel,
+        MockPriceModel,
+        MockProductModel,
+        MockCategoryModel,
+    ):
         # Arrange
         mock_session = MagicMock()
         repository = SQLAlchemyProductRepository(mock_session)
@@ -34,19 +52,45 @@ class TestSQLAlchemyProductRepository:
             inventory=inventory,
         )
 
-        mock_category_model_instance = MagicMock()
+        mock_category_model_instance = MagicMock(spec=CategoryModel)
         mock_category_model_instance.id = 1
+        mock_category_model_instance.name = (
+            "Electronics"  # Set a real string value
+        )
         mock_session.query.return_value.filter.return_value.first.return_value = (
             mock_category_model_instance
         )
 
+        mock_product_model_instance = MagicMock(spec=ProductModel)
+        mock_product_model_instance.id = 1
+        mock_product_model_instance.sku = "123ABC"
+        MockProductModel.return_value = mock_product_model_instance
+
+        mock_price_model_instance = MagicMock(spec=PriceModel)
+        mock_price_model_instance.id = 1
+        mock_price_model_instance.amount = 999.99
+        MockPriceModel.return_value = mock_price_model_instance
+
+        mock_inventory_model_instance = MagicMock(spec=InventoryModel)
+        mock_inventory_model_instance.id = 1
+        mock_inventory_model_instance.quantity = 50
+        MockInventoryModel.return_value = mock_inventory_model_instance
+
         # Act
-        repository.save(product)
+        result = repository.save(product)
 
         # Assert
         mock_session.add.assert_called()
         mock_session.commit.assert_called()
         mock_session.refresh.assert_called()
+
+        # Check if the returned ProductEntity matches the expected values
+        assert result.id == mock_product_model_instance.id
+        assert result.sku == product.sku
+        assert result.name == product.name
+        assert result.category.name == product.category.name
+        assert result.price.amount == product.price.amount
+        assert result.inventory.quantity == product.inventory.quantity
 
     def test_find_by_sku_found(self):
         # Arrange
