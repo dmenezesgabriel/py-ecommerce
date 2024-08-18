@@ -11,7 +11,6 @@ DATABASE_URL += f"{Config.DATABASE_USER}:{Config.DATABASE_PASSWORD}"
 DATABASE_URL += f"@{Config.DATABASE_HOST}:{Config.DATABASE_PORT}/"
 DATABASE_URL += f"{Config.DATABASE_NAME}"
 
-
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -27,6 +26,7 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
+
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
