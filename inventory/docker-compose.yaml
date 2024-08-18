@@ -12,6 +12,7 @@ services:
       - inventory_network
     command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
     environment:
+      BROKER_HOST: rabbitmq
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
       DATABASE_NAME: inventory

@@ -5,6 +5,7 @@ from src.application.services.delivery_service import DeliveryService
 from src.application.services.order_verification_service import (
     OrderVerificationService,
 )
+from src.config import Config
 from src.infrastructure.health.health_service import HealthService
 from src.infrastructure.messaging.delivery_publisher import DeliveryPublisher
 from src.infrastructure.persistence.db_setup import get_db
@@ -19,14 +20,14 @@ from src.infrastructure.persistence.sqlalchemy_delivery_repository import (
 def get_health_service(
     db: Session = Depends(get_db),
 ) -> HealthService:
-    return HealthService(db, rabbitmq_host="rabbitmq")
+    return HealthService(db, rabbitmq_host=Config.BROKER_HOST)
 
 
 def get_delivery_service(
     db: Session = Depends(get_db),
     delivery_publisher: DeliveryPublisher = Depends(
         lambda: DeliveryPublisher(
-            pika.ConnectionParameters(host="rabbitmq", heartbeat=120)
+            pika.ConnectionParameters(host=Config.BROKER_HOST, heartbeat=120)
         )
     ),
     order_verification_service: OrderVerificationService = Depends(

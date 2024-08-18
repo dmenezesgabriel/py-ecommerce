@@ -1,5 +1,6 @@
 import json
 import logging
+import socket
 import time
 
 import pika
@@ -26,7 +27,7 @@ class DeliveryPublisher:
                 )
                 self.channel = self.connection.channel()
                 return
-            except pika.exceptions.AMQPConnectionError as e:
+            except (pika.exceptions.AMQPConnectionError, socket.gaierror) as e:
                 attempts += 1
                 logger.error(
                     f"Attempt {attempts}/{self.max_retries} failed: {str(e)}"

@@ -8,6 +8,7 @@ services:
     command: |
       python -m pytest tests -s -vv -x --cov . --cov-report=html:/app/reports/coverage --alluredir /app/allure-results
     environment:
+      BROKER_HOST: rabbitmq
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
       DATABASE_NAME: inventory

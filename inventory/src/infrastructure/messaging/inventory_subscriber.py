@@ -5,6 +5,7 @@ import time
 
 import pika
 from src.application.services.product_service import ProductService
+from src.config import Config
 
 logger = logging.getLogger()
 
@@ -18,7 +19,7 @@ class InventorySubscriber:
     ):
         self.product_service = product_service
         self.connection_params = pika.ConnectionParameters(
-            host="rabbitmq", heartbeat=120
+            host=Config.BROKER_HOST, heartbeat=120
         )
         self.max_retries = max_retries
         self.delay = delay

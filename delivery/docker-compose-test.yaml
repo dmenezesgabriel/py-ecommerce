@@ -9,6 +9,7 @@ services:
       python -m pytest tests -s -vv -x --cov . --cov-report=html:/app/reports/coverage --alluredir /app/allure-results
     environment:
       ORDER_SERVICE_BASE_URL: "http://orders_service:8002/orders/"
+      BROKER_HOST: rabbitmq
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
       DATABASE_NAME: delivery
