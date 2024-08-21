@@ -295,3 +295,140 @@ def test_delete_customer_not_found(order_service):
     # Act & Assert
     with pytest.raises(EntityNotFound):
         order_service.delete_customer("john@example.com")
+
+
+# Existing imports and fixtures remain the same
+
+
+def test_get_order_by_order_number(order_service):
+    # Arrange
+    order = Mock(spec=OrderEntity, order_number="ORD123")
+    order_service.order_repository.find_by_order_number.return_value = order
+
+    # Act
+    result = order_service.get_order_by_order_number("ORD123")
+
+    # Assert
+    assert result == order
+    order_service.order_repository.find_by_order_number.assert_called_once_with(
+        "ORD123"
+    )
+
+
+def test_get_order_by_order_number_not_found(order_service):
+    # Arrange
+    order_service.order_repository.find_by_order_number.return_value = None
+
+    # Act & Assert
+    with pytest.raises(EntityNotFound):
+        order_service.get_order_by_order_number("ORD123")
+
+
+def test_delete_order(order_service):
+    # Arrange
+    order = Mock(spec=OrderEntity, id=1)
+    order_service.order_repository.find_by_id.return_value = order
+
+    # Act
+    result = order_service.delete_order(1)
+
+    # Assert
+    assert result == order
+    order_service.order_repository.delete.assert_called_once_with(order)
+
+
+def test_delete_order_not_found(order_service):
+    # Arrange
+    order_service.order_repository.find_by_id.return_value = None
+
+    # Act & Assert
+    with pytest.raises(EntityNotFound):
+        order_service.delete_order(1)
+
+
+def test_update_customer_not_found(order_service):
+    # Arrange
+    updated_customer = CustomerEntity(
+        name="Jane Doe", email="jane@example.com"
+    )
+    order_service.customer_repository.find_by_email.return_value = None
+
+    # Act & Assert
+    with pytest.raises(EntityNotFound):
+        order_service.update_customer("jane@example.com", updated_customer)
+
+
+def test_set_paid_order(order_service):
+    # Arrange
+    order = Mock(spec=OrderEntity, id=1, status=OrderStatus.PENDING)
+    order_service.get_order_by_id = Mock(return_value=order)
+
+    # Act
+    order_service.set_paid_order(1)
+
+    # Assert
+    order.update_status.assert_called_once_with(OrderStatus.PAID)
+    order_service.order_repository.save.assert_called_once_with(order)
+
+
+def test_list_orders(order_service):
+    # Arrange
+    orders = [Mock(spec=OrderEntity), Mock(spec=OrderEntity)]
+    order_service.order_repository.list_all.return_value = orders
+
+    # Act
+    result = order_service.list_orders()
+
+    # Assert
+    assert result == orders
+    order_service.order_repository.list_all.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_create_order_inventory_publisher_failure(order_service):
+    # Arrange
+    customer = Mock(spec=CustomerEntity, email="jane@example.com")
+    order_item = Mock(spec=OrderItemEntity, product_sku="ABC123", quantity=2)
+    order_service.customer_repository.find_by_email.return_value = None
+    order_service.validate_inventory = AsyncMock(return_value=True)
+    order_service.inventory_publisher.publish_inventory_update.side_effect = (
+        Exception("Publisher Error")
+    )
+
+    # Act & Assert
+    with pytest.raises(Exception) as excinfo:
+        await order_service.create_order(customer, [order_item])
+    assert str(excinfo.value) == "Publisher Error"
+
+    # Verify that the inventory was rolled back
+    order_service.inventory_publisher.publish_inventory_update.assert_any_call(
+        "ABC123", "add", 2
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_order_inventory_failure(order_service):
+    # Arrange
+    order = Mock(spec=OrderEntity, id=1, status=OrderStatus.PENDING)
+    customer = Mock(spec=CustomerEntity, email="john@example.com")
+    order_item = Mock(spec=OrderItemEntity, product_sku="ABC123", quantity=2)
+    order_service.order_repository.find_by_id.return_value = order
+    order_service.validate_inventory = AsyncMock(return_value=False)
+
+    # Act & Assert
+    with pytest.raises(HTTPException):
+        await order_service.update_order(1, customer, [order_item])
+
+
+@pytest.mark.asyncio
+async def test_calculate_order_total_404_error(order_service):
+    # Arrange
+    order_item = Mock(product_sku="ABC123", quantity=2)
+    order = Mock(spec=OrderEntity, order_items=[order_item])
+    async_mock_response = AsyncMock()
+    async_mock_response.__aenter__.return_value.status = 404
+
+    with patch("aiohttp.ClientSession.get", return_value=async_mock_response):
+        with pytest.raises(HTTPException) as excinfo:
+            await order_service.calculate_order_total(order)
+        assert excinfo.value.status_code == 404
