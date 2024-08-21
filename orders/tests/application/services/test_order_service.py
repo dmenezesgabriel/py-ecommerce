@@ -432,3 +432,47 @@ async def test_calculate_order_total_404_error(order_service):
         with pytest.raises(HTTPException) as excinfo:
             await order_service.calculate_order_total(order)
         assert excinfo.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_confirm_order_non_pending(order_service):
+    # Arrange
+    order = Mock(spec=OrderEntity, id=1, status=OrderStatus.CONFIRMED)
+    order_service.get_order_by_id = Mock(return_value=order)
+
+    # Act & Assert
+    with pytest.raises(InvalidEntity):
+        await order_service.confirm_order(1)
+
+
+@pytest.mark.asyncio
+async def test_cancel_order_invalid_status(order_service):
+    # Arrange
+    order = Mock(spec=OrderEntity, id=1, status=OrderStatus.SHIPPED)
+    order_service.get_order_by_id = Mock(return_value=order)
+
+    # Act & Assert
+    with pytest.raises(InvalidEntity):
+        order_service.cancel_order(1)
+
+
+@pytest.mark.asyncio
+async def test_create_order_general_exception(order_service):
+    # Arrange
+    customer = Mock(spec=CustomerEntity, email="jane@example.com")
+    order_item = Mock(spec=OrderItemEntity, product_sku="ABC123", quantity=2)
+    order_service.customer_repository.find_by_email.return_value = None
+    order_service.validate_inventory = AsyncMock(return_value=True)
+    order_service.order_repository.save.side_effect = Exception(
+        "Unexpected Error"
+    )
+
+    # Act & Assert
+    with pytest.raises(Exception) as excinfo:
+        await order_service.create_order(customer, [order_item])
+    assert str(excinfo.value) == "Unexpected Error"
+
+    # Verify rollback of inventory updates
+    order_service.inventory_publisher.publish_inventory_update.assert_any_call(
+        "ABC123", "add", 2
+    )
