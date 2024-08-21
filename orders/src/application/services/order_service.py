@@ -47,7 +47,7 @@ class OrderService:
                     if response.status != 200:
                         logger.error(
                             f"Product SKU {item.product_sku} not found in inventory. "
-                            f"Response: {await response.json()}"
+                            f"Response: {response.status}, {await response.json()}"
                         )
                         return False
                     product = await response.json()
@@ -304,6 +304,7 @@ class OrderService:
         customer.email = updated_customer.email
         customer.phone_number = updated_customer.phone_number
         self.customer_repository.save(customer)
+        # TODO should get from repository again, not return the argument
         return customer
 
     def delete_customer(self, email: str) -> None:
