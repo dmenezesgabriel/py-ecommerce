@@ -9,3 +9,8 @@
 - [] Add behaviour tests
 - [] Add Contract tests
 - [] Refactor entity validation methods to a separated function
+- [] Add logical Delete for delivery
+- [] Add customer update
+- [] Add address update
+- [] Get deliveries by customer
+- [] Pagination
