@@ -164,3 +164,8 @@ cython_debug/
 *.db
 
 allure-results/
+odc_data/
+odc_report/
+odc-reports/
+*.cer
+*.key

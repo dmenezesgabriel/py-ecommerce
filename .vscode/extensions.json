@@ -15,7 +15,8 @@
     "shardulm94.trailing-spaces",
     "streetsidesoftware.code-spell-checker-portuguese-brazilian",
     "streetsidesoftware.code-spell-checker",
-    "hediet.vscode-drawio"
+    "hediet.vscode-drawio",
+    "SonarSource.sonarlint-vscode"
   ],
   // List of extensions recommended by VS Code that should not be recommended for users of this workspace.
   "unwantedRecommendations": []

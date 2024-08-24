@@ -25,3 +25,9 @@ bdd-tests:
 
 sonar-scan:
 	docker compose -f docker-compose-sonar.yaml run --rm sonar-scanner
+
+owasp-dependency-check:
+	docker compose -f docker-compose-owasp.yaml run --rm dependency-check
+
+owasp-zap:
+	docker compose -f docker-compose-owasp.yaml up zap
