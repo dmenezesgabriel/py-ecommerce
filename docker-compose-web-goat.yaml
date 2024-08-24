@@ -1,0 +1,9 @@
+services:
+  webgoat:
+    image: webgoat/webgoat:latest
+    container_name: webgoat
+    ports:
+      - "127.0.0.1:9352:8080" # Bind to localhost for the WebGoat application
+      - "127.0.0.1:9353:9090" # Bind to localhost for the WebGoat API
+    environment:
+      - TZ=America/Sao_Paulo # Set the timezone to Sao Paulo
