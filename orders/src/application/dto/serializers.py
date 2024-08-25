@@ -21,6 +21,9 @@ def serialize_order_item(order_item: OrderItemEntity) -> OrderItemResponse:
     return OrderItemResponse(
         product_sku=order_item.product_sku,
         quantity=order_item.quantity,
+        name=order_item.name,
+        description=order_item.description,
+        price=order_item.price,
     )
 
 

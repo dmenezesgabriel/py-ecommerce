@@ -79,7 +79,7 @@ def test_on_message_delivered_status(delivery_subscriber, order_service):
 
     # Assert
     order_service.update_order_status.assert_called_once_with(
-        2, OrderStatus.DELIVERED
+        2, OrderStatus.FINISHED
     )
     ch.basic_ack.assert_called_once_with(delivery_tag=method.delivery_tag)
 

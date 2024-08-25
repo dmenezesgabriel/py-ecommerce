@@ -48,9 +48,9 @@ class DeliverySubscriber(BaseMessagingAdapter):
                 logger.info(f"Order ID {order_id} marked as shipped.")
             if status == "delivered":
                 self.order_service.update_order_status(
-                    order_id, OrderStatus.DELIVERED
+                    order_id, OrderStatus.FINISHED
                 )
-                logger.info(f"Order ID {order_id} marked as delivered.")
+                logger.info(f"Order ID {order_id} marked as finished.")
         except Exception as e:
             logger.error(f"Error processing message: {e}")
         finally:

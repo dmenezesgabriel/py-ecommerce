@@ -35,7 +35,7 @@ async def create_order(
 
 @router.get("/orders/", tags=["Orders"], response_model=List[OrderResponse])
 async def read_orders(service: OrderService = Depends(get_order_service)):
-    orders = service.list_orders()
+    orders = await service.list_orders()
     orders_with_amounts = [
         {"order": order, "amount": await service.calculate_order_total(order)}
         for order in orders
@@ -53,7 +53,7 @@ async def read_order(
     order_id: int, service: OrderService = Depends(get_order_service)
 ):
     try:
-        order = service.get_order_by_id(order_id)
+        order = await service.get_order_by_id(order_id)
         total_amount = await service.calculate_order_total(order)
         return serialize_order(order, total_amount)
     except EntityNotFound as e:
@@ -69,7 +69,7 @@ async def read_order_by_order_number(
     order_number: str, service: OrderService = Depends(get_order_service)
 ):
     try:
-        order = service.get_order_by_order_number(order_number)
+        order = await service.get_order_by_order_number(order_number)
         total_amount = await service.calculate_order_total(order)
         return serialize_order(order, total_amount)
     except EntityNotFound as e:
@@ -109,7 +109,7 @@ async def update_order_status(
     service: OrderService = Depends(get_order_service),
 ):
     try:
-        updated_order = service.update_order_status(
+        updated_order = await service.update_order_status(
             order_id, status_update.status
         )
         total_amount = await service.calculate_order_total(updated_order)
@@ -139,7 +139,7 @@ async def cancel_order(
     order_id: int, service: OrderService = Depends(get_order_service)
 ):
     try:
-        canceled_order = service.cancel_order(order_id)
+        canceled_order = await service.cancel_order(order_id)
         total_amount = await service.calculate_order_total(canceled_order)
         return serialize_order(canceled_order, total_amount)
     except (EntityNotFound, InvalidEntity) as e:
@@ -151,7 +151,7 @@ async def delete_order(
     order_id: int, service: OrderService = Depends(get_order_service)
 ):
     try:
-        service.delete_order(order_id)
+        await service.delete_order(order_id)
         return {"message": "Order deleted successfully"}
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))

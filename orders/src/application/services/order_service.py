@@ -36,6 +36,24 @@ class OrderService:
         self.inventory_publisher = inventory_publisher
         self.order_update_publisher = order_update_publisher
 
+    async def _fetch_product_details(
+        self, order_items: List[OrderItemEntity]
+    ) -> List[OrderItemEntity]:
+        async with aiohttp.ClientSession() as session:
+            for item in order_items:
+                url = f"{Config.INVENTORY_SERVICE_BASE_URL}/products/{item.product_sku}"
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        raise HTTPException(
+                            status_code=404,
+                            detail=f"Product SKU {item.product_sku} not found in inventory.",
+                        )
+                    product = await response.json()
+                    item.name = product.get("name")
+                    item.description = product.get("description")
+                    item.price = product.get("price")
+        return order_items
+
     async def validate_inventory(
         self, order_items: List[OrderItemEntity]
     ) -> bool:
@@ -80,6 +98,7 @@ class OrderService:
                 ),
             )
 
+        order_items = await self._fetch_product_details(order_items)
         order = OrderEntity(
             customer=existing_customer,
             order_items=order_items,
@@ -102,18 +121,26 @@ class OrderService:
                 )
             raise e
 
-    def get_order_by_id(self, order_id: int) -> OrderEntity:
+    async def get_order_by_id(self, order_id: int) -> OrderEntity:
         order = self.order_repository.find_by_id(order_id)
         if not order:
             raise EntityNotFound(f"Order with ID '{order_id}' not found")
+        order.order_items = await self._fetch_product_details(
+            order.order_items
+        )
         return order
 
-    def get_order_by_order_number(self, order_number: str) -> OrderEntity:
+    async def get_order_by_order_number(
+        self, order_number: str
+    ) -> OrderEntity:
         order = self.order_repository.find_by_order_number(order_number)
         if not order:
             raise EntityNotFound(
                 f"Order with Order Number '{order_number}' not found"
             )
+        order.order_items = await self._fetch_product_details(
+            order.order_items
+        )
         return order
 
     async def update_order(
@@ -175,6 +202,7 @@ class OrderService:
                     )
                     inventory_changes.append((item.product_sku, item.quantity))
 
+            order_items = await self._fetch_product_details(order_items)
             order.customer = existing_customer
             order.order_items = order_items
             self.order_repository.save(order)
@@ -189,7 +217,7 @@ class OrderService:
                 )
             raise e
 
-    def update_order_status(
+    async def update_order_status(
         self, order_id: int, status: OrderStatus
     ) -> OrderEntity:
         order = self.order_repository.find_by_id(order_id)
@@ -198,18 +226,21 @@ class OrderService:
 
         order.update_status(status)
         self.order_repository.save(order)
+        order.order_items = await self._fetch_product_details(
+            order.order_items
+        )
         return order
 
-    def set_paid_order(self, order_id: int):
+    async def set_paid_order(self, order_id: int):
         """Sets the order status to PAID."""
-        order = self.get_order_by_id(order_id)
+        order = await self.get_order_by_id(order_id)
         if not order:
             raise EntityNotFound(f"Order with ID '{order_id}' not found")
         order.update_status(OrderStatus.PAID)
         self.order_repository.save(order)
 
     async def confirm_order(self, order_id: int) -> OrderEntity:
-        order = self.get_order_by_id(order_id)
+        order = await self.get_order_by_id(order_id)
         if order.status != OrderStatus.PENDING:
             raise InvalidEntity("Only pending orders can be confirmed")
 
@@ -222,12 +253,15 @@ class OrderService:
                 amount=order.total_amount,
                 status=order.status.value,
             )
+            order.order_items = await self._fetch_product_details(
+                order.order_items
+            )
         except Exception as e:
             raise e
         return order
 
-    def cancel_order(self, order_id: int) -> OrderEntity:
-        order = self.get_order_by_id(order_id)
+    async def cancel_order(self, order_id: int) -> OrderEntity:
+        order = await self.get_order_by_id(order_id)
         if order.status not in [OrderStatus.PENDING, OrderStatus.CONFIRMED]:
             raise InvalidEntity(
                 "Only pending or confirmed orders can be canceled"
@@ -244,20 +278,32 @@ class OrderService:
             self.order_update_publisher.publish_order_update(
                 order_id=order.id, amount=0.0, status=order.status.value
             )
+            order.order_items = await self._fetch_product_details(
+                order.order_items
+            )
         except Exception as e:
             raise e
         return order
 
-    def delete_order(self, order_id: int) -> OrderEntity:
+    async def delete_order(self, order_id: int) -> OrderEntity:
         order = self.order_repository.find_by_id(order_id)
         if not order:
             raise EntityNotFound(f"Order with ID '{order_id}' not found")
 
         self.order_repository.delete(order)
+        order.order_items = await self._fetch_product_details(
+            order.order_items
+        )
         return order
 
-    def list_orders(self) -> List[OrderEntity]:
-        return self.order_repository.list_all()
+    async def list_orders(self) -> List[OrderEntity]:
+        orders = []
+        for order in self.order_repository.list_all():
+            order.order_items = await self._fetch_product_details(
+                order.order_items
+            )
+            orders.append(order)
+        return orders
 
     async def calculate_order_total(self, order: OrderEntity) -> float:
         total_amount = 0.0

@@ -11,7 +11,7 @@ class OrderStatus(Enum):
     PENDING = "pending"
     CONFIRMED = "confirmed"
     SHIPPED = "shipped"
-    DELIVERED = "delivered"
+    FINISHED = "finished"
     CANCELED = "canceled"
     PAID = "paid"
 
