@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, Column, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from src.infrastructure.persistence.db_setup import Base
 
@@ -15,6 +15,8 @@ class ProductModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     sku = Column(String, unique=True, index=True)
     name = Column(String, index=True)
+    description = Column(Text, nullable=True)  # New field for description
+    images = Column(JSON, default=[])  # New field for images as JSON list
     category_id = Column(Integer, ForeignKey("categories.id"))
     category = relationship("CategoryModel", back_populates="products")
     price = relationship("PriceModel", uselist=False, back_populates="product")

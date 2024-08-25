@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from src.domain.entities.category_entity import CategoryEntity
 from src.domain.entities.inventory_entity import InventoryEntity
@@ -7,6 +7,7 @@ from src.domain.exceptions import InvalidEntity
 
 
 class ProductEntity:
+
     def __init__(
         self,
         sku: str,
@@ -14,6 +15,8 @@ class ProductEntity:
         category: CategoryEntity,
         price: PriceEntity,
         inventory: InventoryEntity,
+        description: Optional[str] = None,
+        images: Optional[List[str]] = None,
         id: Optional[int] = None,
     ):
         self._id = id
@@ -22,11 +25,15 @@ class ProductEntity:
         self._category = category
         self._price = price
         self._inventory = inventory
+        self._inventory = inventory
+        self._description = description
+        self._images = images
 
-        # Validate attributes during initialization
         self._validate_id(self._id)
         self._validate_sku(self._sku)
         self._validate_name(self._name)
+        if self._images:
+            self._validate_images(self._images)
 
     @property
     def id(self) -> Optional[int]:
@@ -91,6 +98,35 @@ class ProductEntity:
             )
         self._inventory = value
 
+    @property
+    def description(self) -> Optional[str]:
+        return self._description
+
+    @description.setter
+    def description(self, value: Optional[str]):
+        self._description = value
+
+    @property
+    def images(self) -> List[str]:
+        return self._images
+
+    @images.setter
+    def images(self, value: List[str]):
+        self._validate_images(value)
+        self._images = value
+
+    def _validate_images(self, images_value: List[str]):
+        if not isinstance(images_value, list) or any(
+            not isinstance(image, str) or not image.strip()
+            for image in images_value
+        ):
+            raise InvalidEntity(
+                f"""
+                Invalid images: {images_value}.
+                Images must be a list of non-empty strings.
+                """
+            )
+
     def set_inventory(self, quantity: int):
         self.inventory.set_quantity(quantity)
 
@@ -134,10 +170,12 @@ class ProductEntity:
 
     def to_dict(self) -> dict:
         return {
-            "id": self._id,
-            "sku": self._sku,
-            "name": self._name,
-            "category": self._category.to_dict(),
-            "price": self._price.to_dict(),
-            "inventory": self._inventory.to_dict(),
+            "id": self.id,
+            "sku": self.sku,
+            "name": self.name,
+            "category": self.category.to_dict(),
+            "price": self.price.to_dict(),
+            "inventory": self.inventory.to_dict(),
+            "description": self.description,
+            "images": self.images,
         }

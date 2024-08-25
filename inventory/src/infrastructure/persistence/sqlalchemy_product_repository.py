@@ -51,6 +51,8 @@ class SQLAlchemyProductRepository(ProductRepository):
             self.db.refresh(db_product)
 
         db_product.name = product.name
+        db_product.description = product.description
+        db_product.images = product.images
         db_product.category = category_model
         db_product.price = PriceModel(
             product_id=db_product.id, amount=product.price.amount
@@ -77,6 +79,8 @@ class SQLAlchemyProductRepository(ProductRepository):
             price=PriceEntity(
                 id=db_product.price.id, amount=db_product.price.amount
             ),
+            description=db_product.description,
+            images=db_product.images,
         )
 
     def find_by_sku(self, sku: str) -> Optional[ProductEntity]:
@@ -101,6 +105,8 @@ class SQLAlchemyProductRepository(ProductRepository):
                     id=db_product.inventory.id,
                     quantity=db_product.inventory.quantity,
                 ),
+                description=db_product.description,
+                images=db_product.images,
             )
         return None
 
@@ -144,6 +150,8 @@ class SQLAlchemyProductRepository(ProductRepository):
                     id=db_product.inventory.id,
                     quantity=db_product.inventory.quantity,
                 ),
+                description=db_product.description,
+                images=db_product.images,
             )
             for db_product in db_products
         ]

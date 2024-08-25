@@ -26,6 +26,8 @@ def create_product(
             category_name=product.category_name,
             price=product.price,
             quantity=product.quantity,
+            description=product.description,
+            images=product.images,
         )
         return serialize_product(created_product)
     except EntityAlreadyExists as e:
@@ -68,6 +70,8 @@ def update_product(
             category_name=product.category_name,
             price=product.price,
             quantity=product.quantity,
+            description=product.description,
+            images=product.images,
         )
         return serialize_product(updated_product)
     except EntityNotFound as e:

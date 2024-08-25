@@ -11,6 +11,8 @@ def serialize_product(product: ProductEntity) -> ProductResponse:
         category_name=product.category.name,
         price=product.price.amount,
         quantity=product.inventory.quantity,
+        description=product.description,
+        images=product.images,
     )
 
 
