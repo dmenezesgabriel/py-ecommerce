@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 
 import pika
 from bson.objectid import ObjectId
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
@@ -210,6 +210,21 @@ class PaymentService:
 
         self.payment_repository.delete(payment)
         return payment
+
+    def handle_webhook(self, payment_id: str, status: str) -> PaymentEntity:
+        payment = self.get_payment_by_id(payment_id)
+        if status == "approved":
+            updated_payment = self.update_payment_status(
+                payment.id, PaymentStatus.COMPLETED.value
+            )
+        elif status == "rejected":
+            updated_payment = self.update_payment_status(
+                payment.id, PaymentStatus.FAILED.value
+            )
+        else:
+            raise InvalidAction(f"Unsupported status '{status}' in webhook")
+
+        return updated_payment
 
 
 class HealthService:
@@ -587,6 +602,25 @@ class PaymentResponse(BaseModel):
         }
 
 
+class WebhookPayload(BaseModel):
+    payment_id: str
+    status: str
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "payment_id": "64c8cbe2f3a5e9a1c4b63e29",
+                    "status": "approved",
+                },
+                {
+                    "payment_id": "64c8cbe2f3a5e9a1c4b63e30",
+                    "status": "rejected",
+                },
+            ]
+        }
+
+
 @app.post("/payments/", tags=["Payments"], response_model=PaymentResponse)
 def create_payment(
     payment: PaymentCreate,
@@ -671,99 +705,22 @@ def update_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.put(
-    "/payments/{payment_id}/status",
+@app.post(
+    "/payments/webhook",
     tags=["Payments"],
     response_model=PaymentResponse,
 )
-def update_payment_status(
-    payment_id: str,
-    status_update: PaymentStatusUpdate,
+async def handle_webhook(
+    payload: WebhookPayload,
     service: PaymentService = Depends(get_payment_service),
 ):
     try:
-        updated_payment = service.update_payment_status(
-            payment_id, status_update.status
-        )
+        payment_id = payload.payment_id
+        status = payload.status
+
+        updated_payment = service.handle_webhook(payment_id, status)
         return serialize_payment(updated_payment)
-    except EntityNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except InvalidAction as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
-
-@app.put(
-    "/payments/{payment_id}/complete",
-    tags=["Payments"],
-    response_model=PaymentResponse,
-)
-def complete_payment(
-    payment_id: str,
-    service: PaymentService = Depends(get_payment_service),
-):
-    try:
-        updated_payment = service.update_payment_status(
-            payment_id, PaymentStatus.COMPLETED.value
-        )
-        return serialize_payment(updated_payment)
-    except EntityNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except InvalidAction as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.put(
-    "/payments/{payment_id}/fail",
-    tags=["Payments"],
-    response_model=PaymentResponse,
-)
-def fail_payment(
-    payment_id: str,
-    service: PaymentService = Depends(get_payment_service),
-):
-    try:
-        updated_payment = service.update_payment_status(
-            payment_id, PaymentStatus.FAILED.value
-        )
-        return serialize_payment(updated_payment)
-    except EntityNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except InvalidAction as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.put(
-    "/payments/{payment_id}/refund",
-    tags=["Payments"],
-    response_model=PaymentResponse,
-)
-def refund_payment(
-    payment_id: str,
-    service: PaymentService = Depends(get_payment_service),
-):
-    try:
-        updated_payment = service.update_payment_status(
-            payment_id, PaymentStatus.REFUNDED.value
-        )
-        return serialize_payment(updated_payment)
-    except EntityNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except InvalidAction as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.put(
-    "/payments/{payment_id}/cancel",
-    tags=["Payments"],
-    response_model=PaymentResponse,
-)
-def cancel_payment(
-    payment_id: str,
-    service: PaymentService = Depends(get_payment_service),
-):
-    try:
-        canceled_payment = service.cancel_payment(payment_id)
-        return serialize_payment(canceled_payment)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
     except InvalidAction as e:
