@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel
 from src.application.dto.customer_dto import CustomerCreate, CustomerResponse
@@ -66,6 +66,7 @@ class OrderResponse(BaseModel):
     order_items: List[OrderItemResponse]
     status: OrderStatus
     total_amount: float
+    estimated_time: Optional[str] = None
 
     model_config = {
         "from_attributes": True,
@@ -86,7 +87,16 @@ class OrderResponse(BaseModel):
                     ],
                     "status": "confirmed",
                     "total_amount": 30.00,
+                    "estimated_time": "02:30",
                 }
             ]
         },
+    }
+
+
+class EstimatedTimeUpdate(BaseModel):
+    estimated_time: str
+
+    model_config = {
+        "json_schema_extra": {"examples": [{"estimated_time": "02:30"}]}
     }

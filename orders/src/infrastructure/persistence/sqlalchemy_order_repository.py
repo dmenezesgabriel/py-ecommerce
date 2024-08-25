@@ -38,12 +38,14 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 .filter(OrderModel.id == order.id)
                 .first()
             )
+            db_order.estimated_time = order.estimated_time
             db_order.status = order.status
         else:
             db_order = OrderModel(
                 order_number=order.order_number,
                 customer_id=customer_model.id,
                 status=order.status,
+                estimated_time=order.estimated_time,
             )
             self.db.add(db_order)
             self.db.commit()
@@ -99,6 +101,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 ],
                 status=db_order.status,
                 order_number=db_order.order_number,
+                estimated_time=db_order.estimated_time,
             )
         return None
 
@@ -137,6 +140,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 ],
                 status=db_order.status,
                 order_number=db_order.order_number,
+                estimated_time=db_order.estimated_time,
             )
         return None
 
@@ -169,6 +173,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 ],
                 status=db_order.status,
                 order_number=db_order.order_number,
+                estimated_time=db_order.estimated_time,
             )
             for db_order in db_orders
         ]

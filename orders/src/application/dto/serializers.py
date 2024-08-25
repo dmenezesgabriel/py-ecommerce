@@ -14,6 +14,7 @@ def serialize_order(order: OrderEntity, total_amount: float) -> OrderResponse:
         order_items=[serialize_order_item(item) for item in order.order_items],
         status=order.status,
         total_amount=total_amount,
+        estimated_time=order.estimated_time,
     )
 
 

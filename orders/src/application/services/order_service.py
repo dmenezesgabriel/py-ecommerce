@@ -220,24 +220,28 @@ class OrderService:
     async def update_order_status(
         self, order_id: int, status: OrderStatus
     ) -> OrderEntity:
-        order = self.order_repository.find_by_id(order_id)
+        order = await self.get_order_by_id(order_id)
         if not order:
             raise EntityNotFound(f"Order with ID '{order_id}' not found")
 
         order.update_status(status)
         self.order_repository.save(order)
+        order.total_amount = await self.calculate_order_total(order)
+
+        self.order_update_publisher.publish_order_update(
+            order_id=order.id,
+            amount=order.total_amount,
+            status=order.status.value,
+        )
         order.order_items = await self._fetch_product_details(
             order.order_items
         )
         return order
 
     async def set_paid_order(self, order_id: int):
-        """Sets the order status to PAID."""
-        order = await self.get_order_by_id(order_id)
-        if not order:
-            raise EntityNotFound(f"Order with ID '{order_id}' not found")
-        order.update_status(OrderStatus.PAID)
-        self.order_repository.save(order)
+        return await self.update_order_status(
+            order_id=order_id, status=OrderStatus.PAID
+        )
 
     async def confirm_order(self, order_id: int) -> OrderEntity:
         order = await self.get_order_by_id(order_id)
@@ -320,6 +324,20 @@ class OrderService:
                     product = await response.json()
                     total_amount += product["price"] * item.quantity
         return total_amount
+
+    async def set_estimated_time(
+        self, order_id: int, estimated_time: str
+    ) -> OrderEntity:
+        order = self.order_repository.find_by_id(order_id)
+        if not order:
+            raise EntityNotFound(f"Order with ID '{order_id}' not found")
+
+        order.estimated_time = estimated_time
+        self.order_repository.save(order)
+        order.order_items = await self._fetch_product_details(
+            order.order_items
+        )
+        return order
 
     def get_all_customers(self) -> List[CustomerEntity]:
         return self.customer_repository.list_all()

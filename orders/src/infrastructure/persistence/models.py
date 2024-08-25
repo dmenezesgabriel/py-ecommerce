@@ -24,6 +24,7 @@ class OrderModel(Base):
     )
     customer_id = Column(Integer, ForeignKey("customers.id"))
     status = Column(Enum(OrderStatus), default=OrderStatus.PENDING)
+    estimated_time = Column(String, nullable=True)
     customer = relationship("CustomerModel", back_populates="orders")
     order_items = relationship(
         "OrderItemModel", back_populates="order", cascade="all, delete-orphan"

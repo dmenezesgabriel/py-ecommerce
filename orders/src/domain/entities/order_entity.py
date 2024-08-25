@@ -9,6 +9,9 @@ from src.domain.exceptions import InvalidEntity
 
 class OrderStatus(Enum):
     PENDING = "pending"
+    RECEIVED = "received"
+    PREPARING = "preparing"
+    READY = "ready"
     CONFIRMED = "confirmed"
     SHIPPED = "shipped"
     FINISHED = "finished"
@@ -23,6 +26,7 @@ class OrderEntity:
         customer: CustomerEntity,
         order_items: List[OrderItemEntity],
         status: OrderStatus = OrderStatus.PENDING,
+        estimated_time: Optional[str] = None,
         id: Optional[int] = None,
         order_number: Optional[str] = None,
         total_amount: Optional[float] = None,
@@ -33,13 +37,14 @@ class OrderEntity:
         self._order_items = order_items
         self._status = status
         self._total_amount = total_amount or 0.0
+        self._estimated_time = estimated_time
 
-        # Validate attributes during initialization
         self._validate_id(self._id)
         self._validate_order_number(self._order_number)
         self._validate_customer(self._customer)
         self._validate_order_items(self._order_items)
         self._validate_total_amount(self._total_amount)
+        self._validate_estimated_time(self._estimated_time)
 
     @property
     def id(self) -> Optional[int]:
@@ -94,6 +99,15 @@ class OrderEntity:
         self._validate_total_amount(value)
         self._total_amount = value
 
+    @property
+    def estimated_time(self) -> Optional[str]:
+        return self._estimated_time
+
+    @estimated_time.setter
+    def estimated_time(self, value: Optional[str]):
+        self._validate_estimated_time(value)
+        self._estimated_time = value
+
     def add_item(self, order_item: OrderItemEntity):
         self._order_items.append(order_item)
 
@@ -140,6 +154,14 @@ class OrderEntity:
                 f"Invalid total amount: {total_amount_value}. Total amount must be a non-negative number."
             )
 
+    def _validate_estimated_time(self, estimated_time_value: Optional[str]):
+        if estimated_time_value is not None and not isinstance(
+            estimated_time_value, str
+        ):
+            raise InvalidEntity(
+                f"Invalid estimated time: {estimated_time_value}. Must be a valid string."
+            )
+
     def to_dict(self) -> dict:
         return {
             "id": self._id,
@@ -148,4 +170,5 @@ class OrderEntity:
             "order_items": [item.to_dict() for item in self._order_items],
             "status": self._status.value,
             "total_amount": self._total_amount,
+            "estimated_time": self._estimated_time,
         }

@@ -3,6 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from src.adapters.dependencies import get_order_service
 from src.application.dto.order_dto import (
+    EstimatedTimeUpdate,
     OrderCreate,
     OrderResponse,
     OrderStatusUpdate,
@@ -10,6 +11,7 @@ from src.application.dto.order_dto import (
 from src.application.dto.serializers import serialize_order
 from src.application.services.order_service import OrderService
 from src.domain.entities.customer_entity import CustomerEntity
+from src.domain.entities.order_entity import OrderStatus
 from src.domain.entities.order_item_entity import OrderItemEntity
 from src.domain.exceptions import EntityNotFound, InvalidEntity
 
@@ -153,5 +155,80 @@ async def delete_order(
     try:
         await service.delete_order(order_id)
         return {"message": "Order deleted successfully"}
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put(
+    "/orders/{order_id}/estimated-time",
+    tags=["Orders"],
+    response_model=OrderResponse,
+)
+async def set_estimated_time(
+    order_id: int,
+    estimated_time_update: EstimatedTimeUpdate,
+    service: OrderService = Depends(get_order_service),
+):
+    try:
+        updated_order = await service.set_estimated_time(
+            order_id, estimated_time_update.estimated_time
+        )
+        total_amount = await service.calculate_order_total(updated_order)
+        return serialize_order(updated_order, total_amount)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put(
+    "/orders/{order_id}/received",
+    tags=["Orders"],
+    response_model=OrderResponse,
+)
+async def update_order_to_received(
+    order_id: int,
+    service: OrderService = Depends(get_order_service),
+):
+    try:
+        updated_order = await service.update_order_status(
+            order_id, OrderStatus.RECEIVED
+        )
+        total_amount = await service.calculate_order_total(updated_order)
+        return serialize_order(updated_order, total_amount)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put(
+    "/orders/{order_id}/preparing",
+    tags=["Orders"],
+    response_model=OrderResponse,
+)
+async def update_order_to_preparing(
+    order_id: int,
+    service: OrderService = Depends(get_order_service),
+):
+    try:
+        updated_order = await service.update_order_status(
+            order_id, OrderStatus.PREPARING
+        )
+        total_amount = await service.calculate_order_total(updated_order)
+        return serialize_order(updated_order, total_amount)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put(
+    "/orders/{order_id}/ready", tags=["Orders"], response_model=OrderResponse
+)
+async def update_order_to_ready(
+    order_id: int,
+    service: OrderService = Depends(get_order_service),
+):
+    try:
+        updated_order = await service.update_order_status(
+            order_id, OrderStatus.READY
+        )
+        total_amount = await service.calculate_order_total(updated_order)
+        return serialize_order(updated_order, total_amount)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
