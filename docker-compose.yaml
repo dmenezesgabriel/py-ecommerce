@@ -223,16 +223,6 @@ services:
     # depends_on:
     #   - kong-migrations
 
-  bdd:
-    build:
-      context: ./bdd
-      dockerfile: Dockerfile.bdd
-    volumes:
-      - ./bdd:/app/
-    command: behave
-    networks:
-      - ecommerce_network
-
 networks:
   ecommerce_network:
     driver: bridge

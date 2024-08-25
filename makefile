@@ -10,3 +10,6 @@ apply-orders-migrations: apply-migrations-orders-service
 
 apply-delivery-migrations: apply-migrations-delivery-service
 	echo "Applying delivery migrations"
+
+apply-all-migrations: apply-inventory-migrations apply-orders-migrations apply-delivery-migrations
+	echo "Applying all migrations"

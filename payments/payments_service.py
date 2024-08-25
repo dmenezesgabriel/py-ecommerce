@@ -4,12 +4,12 @@ import os
 import threading
 import time
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import pika
 from bson.objectid import ObjectId
 from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 
@@ -64,12 +64,16 @@ class PaymentEntity:
         order_id: int,
         amount: float,
         status: str,
+        qr_code: Optional[str] = None,
+        qr_code_expiration: Optional[int] = None,
         id: Optional[str] = None,
     ):
         self.id = id
         self.order_id = order_id
         self.amount = amount
         self.status = status
+        self.qr_code = qr_code
+        self.qr_code_expiration = qr_code_expiration
 
     def update_status(self, new_status: str):
         self.status = new_status
@@ -77,9 +81,10 @@ class PaymentEntity:
 
 # Services
 class PaymentService:
-    def __init__(self, payment_repository, payment_publisher):
+    def __init__(self, payment_repository, payment_publisher, qr_code_service):
         self.payment_repository = payment_repository
         self.payment_publisher = payment_publisher
+        self.qr_code_service = qr_code_service
 
     def create_payment(
         self, order_id: int, amount: float, status: str
@@ -90,8 +95,16 @@ class PaymentService:
                 f"Payment with order_id '{order_id}' already exists"
             )
 
+        qr_code, qr_code_expiration = self.qr_code_service.create_qr_code(
+            order_id, amount
+        )
+
         payment_entity = PaymentEntity(
-            order_id=order_id, amount=amount, status=status
+            order_id=order_id,
+            amount=amount,
+            status=status,
+            qr_code=qr_code,
+            qr_code_expiration=qr_code_expiration,
         )
         self.payment_repository.save(payment_entity)
         return payment_entity
@@ -272,6 +285,8 @@ class MongoDBPaymentRepository(PaymentRepository):
                 order_id=payment_data["order_id"],
                 amount=payment_data["amount"],
                 status=payment_data["status"],
+                qr_code=payment_data.get("qr_code"),
+                qr_code_expiration=payment_data.get("qr_code_expiration"),
             )
         return None
 
@@ -283,6 +298,8 @@ class MongoDBPaymentRepository(PaymentRepository):
                 order_id=payment_data["order_id"],
                 amount=payment_data["amount"],
                 status=payment_data["status"],
+                qr_code=payment_data.get("qr_code"),
+                qr_code_expiration=payment_data.get("qr_code_expiration"),
             )
         return None
 
@@ -412,6 +429,23 @@ class OrderSubscriber(BaseMessagingAdapter):
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
+# QR Code Service (Mock)
+class QRCodeService:
+    def __init__(self, mercado_pago_access_token: str):
+        self.mercado_pago_access_token = mercado_pago_access_token
+
+    def create_qr_code(self, order_id: int, amount: float) -> Tuple[str, int]:
+        logger.info(
+            f"Mocking QR code creation for order_id: {order_id}, amount: {amount}"
+        )
+
+        # Mocked response from MercadoPago API
+        qr_code = f"https://www.mercadopago.com.br/qr-code/{order_id}"
+        qr_code_expiration = int(time.time()) + 3600  # 1 hour expiration
+
+        return qr_code, qr_code_expiration
+
+
 # FastAPI Routes (Adapter)
 @app.on_event("startup")
 def on_startup():
@@ -429,7 +463,10 @@ def on_startup():
 def get_payment_service() -> PaymentService:
     payment_repository = MongoDBPaymentRepository(payments_collection)
     payment_publisher = get_payment_publisher()
-    return PaymentService(payment_repository, payment_publisher)
+    qr_code_service = get_qr_code_service()
+    return PaymentService(
+        payment_repository, payment_publisher, qr_code_service
+    )
 
 
 def get_payment_publisher() -> PaymentPublisher:
@@ -437,6 +474,13 @@ def get_payment_publisher() -> PaymentPublisher:
         host="rabbitmq", heartbeat=120
     )
     return PaymentPublisher(connection_params)
+
+
+def get_qr_code_service() -> QRCodeService:
+    mercado_pago_access_token = os.getenv(
+        "MERCADO_PAGO_ACCESS_TOKEN", "your_access_token_here"
+    )
+    return QRCodeService(mercado_pago_access_token)
 
 
 def get_health_service() -> HealthService:
@@ -513,6 +557,8 @@ class PaymentResponse(BaseModel):
     order_id: int
     amount: float
     status: PaymentStatus
+    qr_code: Optional[str]
+    qr_code_expiration: Optional[int]
 
     class Config:
         from_attributes = True
@@ -526,12 +572,16 @@ class PaymentResponse(BaseModel):
                     "order_id": 1,
                     "amount": 100.00,
                     "status": "completed",
+                    "qr_code": "https://www.mercadopago.com.br/qr-code/1",
+                    "qr_code_expiration": 1633520400,
                 },
                 {
                     "id": "64c8cbe2f3a5e9a1c4b63e30",
                     "order_id": 2,
                     "amount": 250.75,
                     "status": "pending",
+                    "qr_code": "https://www.mercadopago.com.br/qr-code/2",
+                    "qr_code_expiration": 1633520400,
                 },
             ]
         }
@@ -563,6 +613,8 @@ def read_payments(service: PaymentService = Depends(get_payment_service)):
                 order_id=payment["order_id"],
                 amount=payment["amount"],
                 status=payment["status"],
+                qr_code=payment.get("qr_code"),
+                qr_code_expiration=payment.get("qr_code_expiration"),
             )
         )
         for payment in payments
@@ -741,4 +793,6 @@ def serialize_payment(payment: PaymentEntity) -> PaymentResponse:
         order_id=payment.order_id,
         amount=payment.amount,
         status=payment.status,
+        qr_code=payment.qr_code,
+        qr_code_expiration=payment.qr_code_expiration,
     )
