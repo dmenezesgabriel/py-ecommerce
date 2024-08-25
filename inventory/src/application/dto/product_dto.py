@@ -59,7 +59,7 @@ class ProductResponse(BaseModel):
     category_name: str
     price: float
     quantity: int
-    description: Optional[str]
+    description: Optional[str] = None
     images: Optional[List[str]] = None
 
     model_config = {

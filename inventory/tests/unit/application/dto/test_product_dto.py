@@ -45,6 +45,8 @@ class TestProductCreate:
             category_name="Food",
             price=1.50,
             quantity=100,
+            images=["http://example.com"],
+            description="Awesome sauce",
         )
 
         # Act
@@ -57,6 +59,8 @@ class TestProductCreate:
             "category_name": "Food",
             "price": 1.50,
             "quantity": 100,
+            "images": ["http://example.com"],
+            "description": "Awesome sauce",
         }
 
     def test_product_create_example(self):
@@ -68,9 +72,11 @@ class TestProductCreate:
             {
                 "sku": "123",
                 "name": "Potato Sauce",
+                "description": "Nice tasty potato sauce",
                 "category_name": "Food",
                 "price": 1.50,
                 "quantity": 100,
+                "images": ["https://example1.com", "https://example2.com"],
             }
         ]
 
@@ -99,7 +105,12 @@ class TestProductUpdate:
     def test_product_update_to_dict(self):
         # Arrange
         product = ProductUpdate(
-            name="Potato Sauce", category_name="Food", price=1.50, quantity=150
+            name="Potato Sauce",
+            category_name="Food",
+            price=1.50,
+            quantity=150,
+            images=["http://example.com"],
+            description="Awesome sauce",
         )
 
         # Act
@@ -111,6 +122,8 @@ class TestProductUpdate:
             "category_name": "Food",
             "price": 1.50,
             "quantity": 150,
+            "images": ["http://example.com"],
+            "description": "Awesome sauce",
         }
 
     def test_product_update_example(self):
@@ -120,10 +133,12 @@ class TestProductUpdate:
         # Assert
         assert example == [
             {
-                "name": "Potato Sauce",
+                "name": "(Updated) Potato Sauce",
+                "description": "(Updated) Nice tasty potato sauce",
                 "category_name": "Food",
                 "price": 1.50,
                 "quantity": 150,
+                "images": ["https://example1.com", "https://example2.com"],
             }
         ]
 
@@ -166,6 +181,8 @@ class TestProductResponse:
             category_name="Food",
             price=1.50,
             quantity=100,
+            images=["http://example.com"],
+            description="Awesome sauce",
         )
 
         # Act
@@ -178,6 +195,8 @@ class TestProductResponse:
             "category_name": "Food",
             "price": 1.50,
             "quantity": 100,
+            "images": ["http://example.com"],
+            "description": "Awesome sauce",
         }
 
     def test_product_response_example(self):
@@ -189,9 +208,11 @@ class TestProductResponse:
             {
                 "sku": "123",
                 "name": "Potato Sauce",
+                "description": "Nice tasty potato sauce",
                 "category_name": "Food",
                 "price": 1.50,
                 "quantity": 100,
+                "images": ["https://example.com", "https://example.com"],
             }
         ]
 

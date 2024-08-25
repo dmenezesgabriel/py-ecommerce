@@ -24,6 +24,8 @@ class TestProductEntity:
             price=price,
             inventory=inventory,
             id=1,
+            description="Product Description",
+            images=["http://example.com"],
         )
 
         # Assert
@@ -33,6 +35,8 @@ class TestProductEntity:
         assert product.category == category
         assert product.price == price
         assert product.inventory == inventory
+        assert product.description == "Product Description"
+        assert product.images == ["http://example.com"]
 
     def test_create_product_invalid_id(self):
         # Arrange
@@ -425,10 +429,12 @@ class TestProductEntity:
         product = ProductEntity(
             sku="ABC123",
             name="Product Name",
+            description="Product Description",
             category=category,
             price=price,
             inventory=inventory,
             id=1,
+            images=["https://example.com"],
         )
 
         # Act
@@ -439,9 +445,11 @@ class TestProductEntity:
             "id": 1,
             "sku": "ABC123",
             "name": "Product Name",
+            "description": "Product Description",
             "category": {"id": 1, "name": "Category"},
             "price": {"id": 1, "amount": 99.99},
             "inventory": {"id": 1, "quantity": 100},
+            "images": ["https://example.com"],
         }
 
 

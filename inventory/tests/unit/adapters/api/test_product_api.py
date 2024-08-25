@@ -37,6 +37,8 @@ class TestProductAPI:
             category=mock_category,
             price=mock_price,
             inventory=mock_inventory,
+            images=["http://example.com"],
+            description="Laptop device",
         )
         mock_service.create_product.return_value = mock_product_entity
         mock_get_product_service.return_value = mock_service
@@ -47,6 +49,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=50,
+            images=["http://example.com"],
+            description="Laptop device",
         )
 
         # Act
@@ -59,6 +63,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=50,
+            images=["http://example.com"],
+            description="Laptop device",
         )
         assert response == ProductResponse(
             id=1,
@@ -67,6 +73,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=50,
+            images=["http://example.com"],
+            description="Laptop device",
         )
 
     @patch("src.adapters.api.product_api.get_product_service")
@@ -84,6 +92,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=50,
+            images=["http://example.com"],
+            description="Laptop device",
         )
 
         # Act & Assert
@@ -96,6 +106,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=50,
+            images=["http://example.com"],
+            description="Laptop device",
         )
         assert exc_info.value.status_code == 400
         assert exc_info.value.detail == "Product already exists"
@@ -115,6 +127,8 @@ class TestProductAPI:
                 category=mock_category,
                 price=mock_price,
                 inventory=mock_inventory,
+                images=["http://example.com"],
+                description="Laptop device",
             ),
             ProductEntity(
                 id=2,
@@ -123,6 +137,8 @@ class TestProductAPI:
                 category=mock_category,
                 price=PriceEntity(amount=799.99),
                 inventory=MagicMock(quantity=100),
+                images=["http://example.com"],
+                description="Smartphone device",
             ),
         ]
         mock_service.list_products.return_value = mock_product_entities
@@ -141,6 +157,8 @@ class TestProductAPI:
                 category_name="Electronics",
                 price=999.99,
                 quantity=50,
+                images=["http://example.com"],
+                description="Laptop device",
             ),
             ProductResponse(
                 id=2,
@@ -149,6 +167,8 @@ class TestProductAPI:
                 category_name="Electronics",
                 price=799.99,
                 quantity=100,
+                images=["http://example.com"],
+                description="Smartphone device",
             ),
         ]
 
@@ -166,6 +186,8 @@ class TestProductAPI:
             category=mock_category,
             price=mock_price,
             inventory=mock_inventory,
+            images=["http://example.com"],
+            description="Smartphone device",
         )
         mock_service.get_product_by_sku.return_value = mock_product_entity
         mock_get_product_service.return_value = mock_service
@@ -182,6 +204,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=50,
+            images=["http://example.com"],
+            description="Smartphone device",
         )
 
     @patch("src.adapters.api.product_api.get_product_service")
@@ -215,6 +239,8 @@ class TestProductAPI:
             category=mock_category,
             price=mock_price,
             inventory=mock_inventory,
+            images=["http://example.com"],
+            description="Smartphone device",
         )
         mock_service.update_product.return_value = mock_product_entity
         mock_get_product_service.return_value = mock_service
@@ -224,6 +250,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=60,
+            images=["http://example.com"],
+            description="Smartphone device",
         )
 
         # Act
@@ -240,6 +268,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=60,
+            images=["http://example.com"],
+            description="Smartphone device",
         )
         assert response == ProductResponse(
             id=1,
@@ -248,6 +278,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=60,
+            images=["http://example.com"],
+            description="Smartphone device",
         )
 
     @patch("src.adapters.api.product_api.get_product_service")
@@ -264,6 +296,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=60,
+            images=["http://example.com"],
+            description="Smartphone device",
         )
 
         # Act & Assert
@@ -280,6 +314,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=60,
+            images=["http://example.com"],
+            description="Smartphone device",
         )
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Product not found"
@@ -298,6 +334,8 @@ class TestProductAPI:
             category=mock_category,
             price=mock_price,
             inventory=mock_inventory,
+            images=["http://example.com"],
+            description="Smartphone device",
         )
         mock_service.delete_product.return_value = mock_product_entity
         mock_get_product_service.return_value = mock_service
@@ -314,6 +352,8 @@ class TestProductAPI:
             category_name="Electronics",
             price=999.99,
             quantity=50,
+            images=["http://example.com"],
+            description="Smartphone device",
         )
 
     @patch("src.adapters.api.product_api.get_product_service")
@@ -348,6 +388,8 @@ class TestProductAPI:
                 category=mock_category,
                 price=mock_price,
                 inventory=mock_inventory,
+                images=["http://example.com"],
+                description="Laptop device",
             ),
             ProductEntity(
                 id=2,
@@ -356,6 +398,8 @@ class TestProductAPI:
                 category=mock_category,
                 price=mock_price,
                 inventory=MagicMock(quantity=100),
+                images=["http://example.com"],
+                description="Smartphone device",
             ),
         ]
         mock_service.get_products_by_category.return_value = (
@@ -380,6 +424,8 @@ class TestProductAPI:
                 category_name="Electronics",
                 price=999.99,
                 quantity=50,
+                images=["http://example.com"],
+                description="Laptop device",
             ),
             ProductResponse(
                 id=2,
@@ -388,6 +434,8 @@ class TestProductAPI:
                 category_name="Electronics",
                 price=999.99,
                 quantity=100,
+                images=["http://example.com"],
+                description="Smartphone device",
             ),
         ]
 

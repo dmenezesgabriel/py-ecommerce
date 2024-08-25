@@ -102,6 +102,8 @@ class TestSQLAlchemyProductRepository:
         mock_product_model_instance.sku = "123ABC"
         mock_product_model_instance.name = "Laptop"
         mock_product_model_instance.category_id = 1
+        mock_product_model_instance.description = "Laptop device"
+        mock_product_model_instance.images = ["https://example.com"]
 
         # Set valid integers for price and inventory IDs directly
         mock_product_model_instance.price.id = 1
@@ -141,6 +143,8 @@ class TestSQLAlchemyProductRepository:
         assert result.category.name == "Electronics"
         assert result.price.amount == 999.99
         assert result.inventory.quantity == 50
+        assert result.description == "Laptop device"
+        assert result.images == ["https://example.com"]
 
     def test_find_by_sku_not_found(self):
         # Arrange
@@ -212,6 +216,8 @@ class TestSQLAlchemyProductRepository:
         mock_session.query.return_value.all.return_value = [
             mock_product_model_instance
         ]
+        mock_product_model_instance.description = "Laptop device"
+        mock_product_model_instance.images = ["https://example.com"]
 
         # Act
         result = repository.list_all()
@@ -225,6 +231,8 @@ class TestSQLAlchemyProductRepository:
         assert result[0].category.name == "Electronics"
         assert result[0].price.amount == 999.99
         assert result[0].inventory.quantity == 50
+        assert result[0].description == "Laptop device"
+        assert result[0].images == ["https://example.com"]
 
     def test_find_by_category(self):
         # Arrange

@@ -27,9 +27,11 @@ class TestSerializeFunctions:
         product = Mock(spec=ProductEntity)
         product.sku = "123"
         product.name = "Potato Sauce"
+        product.description = "Awesome sauce"
         product.category = category
         product.price = price
         product.inventory = inventory
+        product.images = ["http://example.com"]
 
         # Act
         result = serialize_product(product)
@@ -41,6 +43,8 @@ class TestSerializeFunctions:
         assert result.category_name == "Food"
         assert result.price == 1.50
         assert result.quantity == 100
+        assert result.description == "Awesome sauce"
+        assert result.images == ["http://example.com"]
 
     def test_serialize_category(self):
         # Arrange
