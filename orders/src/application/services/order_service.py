@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import aiohttp
 from fastapi import HTTPException  # TODO remove this from service
@@ -308,6 +308,29 @@ class OrderService:
             )
             orders.append(order)
         return orders
+
+    async def list_orders_paginated(
+        self, current_page: int, records_per_page: int
+    ) -> Tuple[List[OrderEntity], int, int, int, int]:
+        offset = (current_page - 1) * records_per_page
+        orders = self.order_repository.list_paginated(offset, records_per_page)
+        total_records = self.order_repository.count_all()
+        number_of_pages = (
+            total_records + records_per_page - 1
+        ) // records_per_page
+
+        for order in orders:
+            order.order_items = await self._fetch_product_details(
+                order.order_items
+            )
+
+        return (
+            orders,
+            current_page,
+            records_per_page,
+            number_of_pages,
+            total_records,
+        )
 
     async def calculate_order_total(self, order: OrderEntity) -> float:
         total_amount = 0.0

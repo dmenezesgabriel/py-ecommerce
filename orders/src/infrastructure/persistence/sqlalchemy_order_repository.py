@@ -177,3 +177,32 @@ class SQLAlchemyOrderRepository(OrderRepository):
             )
             for db_order in db_orders
         ]
+
+    def list_paginated(self, offset: int, limit: int) -> List[OrderEntity]:
+        db_orders = self.db.query(OrderModel).offset(offset).limit(limit).all()
+        return [
+            OrderEntity(
+                id=db_order.id,
+                customer=CustomerEntity(
+                    id=db_order.customer.id,
+                    name=db_order.customer.name,
+                    email=db_order.customer.email,
+                    phone_number=db_order.customer.phone_number,
+                ),
+                order_items=[
+                    OrderItemEntity(
+                        id=item.id,
+                        product_sku=item.product_sku,
+                        quantity=item.quantity,
+                    )
+                    for item in db_order.order_items
+                ],
+                status=db_order.status,
+                order_number=db_order.order_number,
+                estimated_time=db_order.estimated_time,
+            )
+            for db_order in db_orders
+        ]
+
+    def count_all(self) -> int:
+        return self.db.query(OrderModel).count()

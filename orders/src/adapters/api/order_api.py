@@ -6,7 +6,9 @@ from src.application.dto.order_dto import (
     EstimatedTimeUpdate,
     OrderCreate,
     OrderResponse,
+    OrdersPaginatedResponse,
     OrderStatusUpdate,
+    PaginationMeta,
 )
 from src.application.dto.serializers import serialize_order
 from src.application.services.order_service import OrderService
@@ -35,17 +37,32 @@ async def create_order(
     return serialize_order(created_order, created_order.total_amount)
 
 
-@router.get("/orders/", tags=["Orders"], response_model=List[OrderResponse])
-async def read_orders(service: OrderService = Depends(get_order_service)):
-    orders = await service.list_orders()
-    orders_with_amounts = [
-        {"order": order, "amount": await service.calculate_order_total(order)}
-        for order in orders
-    ]
-    return [
-        serialize_order(order["order"], order["amount"])
-        for order in orders_with_amounts
-    ]
+@router.get(
+    "/orders/", tags=["Orders"], response_model=OrdersPaginatedResponse
+)
+async def read_orders(
+    current_page: int = 1,
+    records_per_page: int = 10,  # Default to 10 records per page
+    service: OrderService = Depends(get_order_service),
+):
+    orders, current_page, records_per_page, number_of_pages, total_records = (
+        await service.list_orders_paginated(current_page, records_per_page)
+    )
+
+    response = OrdersPaginatedResponse(
+        orders=[
+            serialize_order(order, await service.calculate_order_total(order))
+            for order in orders
+        ],
+        pagination=PaginationMeta(
+            current_page=current_page,
+            records_per_page=records_per_page,
+            number_of_pages=number_of_pages,
+            total_records=total_records,
+        ),
+    )
+
+    return response
 
 
 @router.get(

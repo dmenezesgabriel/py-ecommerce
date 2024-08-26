@@ -9,6 +9,13 @@ from src.application.dto.order_item_dto import (
 from src.domain.entities.order_entity import OrderStatus
 
 
+class PaginationMeta(BaseModel):
+    current_page: int
+    records_per_page: int
+    number_of_pages: int
+    total_records: int
+
+
 class OrderCreate(BaseModel):
     customer: CustomerCreate
     order_items: List[OrderItemCreate] = []
@@ -99,4 +106,43 @@ class EstimatedTimeUpdate(BaseModel):
 
     model_config = {
         "json_schema_extra": {"examples": [{"estimated_time": "02:30"}]}
+    }
+
+
+class OrdersPaginatedResponse(BaseModel):
+    orders: List[OrderResponse]
+    pagination: PaginationMeta
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "orders": [
+                        {
+                            "id": 1,
+                            "order_number": "ORD123",
+                            "customer": {
+                                "id": 1,
+                                "name": "John Doe",
+                                "email": "john.doe@example.com",
+                                "phone_number": "+123456789",
+                            },
+                            "order_items": [
+                                {"product_sku": "ABC123", "quantity": 2},
+                                {"product_sku": "XYZ456", "quantity": 1},
+                            ],
+                            "status": "confirmed",
+                            "total_amount": 30.00,
+                            "estimated_time": "02:30",
+                        }
+                    ],
+                    "pagination": {
+                        "current_page": 1,
+                        "records_per_page": 1,
+                        "number_of_pages": 5,
+                        "total_records": 5,
+                    },
+                }
+            ]
+        }
     }
