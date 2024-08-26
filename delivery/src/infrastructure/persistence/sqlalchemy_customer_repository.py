@@ -76,5 +76,25 @@ class SQLAlchemyCustomerRepository(CustomerRepository):
             db_customer.email = f"deleted_email_{db_customer.id}@example.com"
             db_customer.phone_number = f"deleted_phone_number_{db_customer.id}"
 
+            # Anonymize related addresses
+            for delivery in db_customer.deliveries:
+                if delivery.address:
+                    delivery.delivery_address = (
+                        f"deleted_address_{delivery.address.id}"
+                    )
+                    delivery.address.city = (
+                        f"deleted_city_{delivery.address.id}"
+                    )
+                    delivery.address.state = (
+                        f"deleted_state_{delivery.address.id}"
+                    )
+                    delivery.address.country = (
+                        f"deleted_country_{delivery.address.id}"
+                    )
+                    delivery.address.zip_code = (
+                        f"deleted_zip_{delivery.address.id}"
+                    )
+                    delivery.address.deleted = 1
+
             db_customer.deleted = 1
             self.db.commit()

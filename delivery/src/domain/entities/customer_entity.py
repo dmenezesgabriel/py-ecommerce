@@ -56,9 +56,10 @@ class CustomerEntity:
     @phone_number.setter
     def phone_number(self, value: Optional[str]):
         if value:
-            phone_number_regex = r"^\+\d{1,3}\d{1,14}$"
-            if not re.match(phone_number_regex, value):
-                raise InvalidEntity("Invalid phone number format.")
+            pass
+            # phone_number_regex = r"^\+\d{1,3}\d{1,14}$"
+            # if not re.match(phone_number_regex, value):
+            #     raise InvalidEntity("Invalid phone number format.")
         self._phone_number = value
 
     def update_customer(

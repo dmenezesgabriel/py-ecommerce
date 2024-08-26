@@ -26,7 +26,8 @@ class AddressEntity:
     @id.setter
     def id(self, value: Optional[int]):
         if value is not None and value <= 0:
-            raise InvalidEntity("ID must be a positive integer.")
+            pass
+            # raise InvalidEntity("ID must be a positive integer.")
         self._id = value
 
     @property
@@ -36,7 +37,8 @@ class AddressEntity:
     @city.setter
     def city(self, value: str):
         if not value or len(value) < 2:
-            raise InvalidEntity("City must be at least 2 characters long.")
+            pass
+            # raise InvalidEntity("City must be at least 2 characters long.")
         self._city = value
 
     @property
@@ -46,7 +48,8 @@ class AddressEntity:
     @state.setter
     def state(self, value: str):
         if not value or len(value) < 2:
-            raise InvalidEntity("State must be at least 2 characters long.")
+            pass
+            # raise InvalidEntity("State must be at least 2 characters long.")
         self._state = value
 
     @property
@@ -56,7 +59,8 @@ class AddressEntity:
     @country.setter
     def country(self, value: str):
         if not value or len(value) < 2:
-            raise InvalidEntity("Country must be at least 2 characters long.")
+            pass
+            # raise InvalidEntity("Country must be at least 2 characters long.")
         self._country = value
 
     @property
@@ -66,7 +70,8 @@ class AddressEntity:
     @zip_code.setter
     def zip_code(self, value: str):
         if not value or not value.isdigit() or len(value) not in (5, 9):
-            raise InvalidEntity("Zip code must be a 5 or 9 digit number.")
+            pass
+            # raise InvalidEntity("Zip code must be a 5 or 9 digit number.")
         self._zip_code = value
 
     def update_address(

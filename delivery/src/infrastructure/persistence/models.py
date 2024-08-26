@@ -36,6 +36,7 @@ class AddressModel(Base):
     state = Column(String)
     country = Column(String)
     zip_code = Column(String)
+    deleted = Column(Integer, default=0)  # Logical delete column for address
     delivery = relationship(
         "DeliveryModel", uselist=False, back_populates="address"
     )
