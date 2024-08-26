@@ -7,7 +7,6 @@ from src.adapters.api.product_api import (
     delete_product,
     get_products_by_category,
     read_product,
-    read_products,
     update_product,
 )
 from src.application.dto.product_dto import (
@@ -111,66 +110,6 @@ class TestProductAPI:
         )
         assert exc_info.value.status_code == 400
         assert exc_info.value.detail == "Product already exists"
-
-    @patch("src.adapters.api.product_api.get_product_service")
-    def test_read_products(self, mock_get_product_service):
-        # Arrange
-        mock_service = MagicMock()
-        mock_category = CategoryEntity(id=1, name="Electronics")
-        mock_price = PriceEntity(id=1, amount=999.99)
-        mock_inventory = MagicMock(quantity=50)
-        mock_product_entities = [
-            ProductEntity(
-                id=1,
-                sku="123ABC",
-                name="Laptop",
-                category=mock_category,
-                price=mock_price,
-                inventory=mock_inventory,
-                images=["http://example.com"],
-                description="Laptop device",
-            ),
-            ProductEntity(
-                id=2,
-                sku="456DEF",
-                name="Smartphone",
-                category=mock_category,
-                price=PriceEntity(amount=799.99),
-                inventory=MagicMock(quantity=100),
-                images=["http://example.com"],
-                description="Smartphone device",
-            ),
-        ]
-        mock_service.list_products.return_value = mock_product_entities
-        mock_get_product_service.return_value = mock_service
-
-        # Act
-        response = read_products(service=mock_service)
-
-        # Assert
-        mock_service.list_products.assert_called_once()
-        assert response == [
-            ProductResponse(
-                id=1,
-                sku="123ABC",
-                name="Laptop",
-                category_name="Electronics",
-                price=999.99,
-                quantity=50,
-                images=["http://example.com"],
-                description="Laptop device",
-            ),
-            ProductResponse(
-                id=2,
-                sku="456DEF",
-                name="Smartphone",
-                category_name="Electronics",
-                price=799.99,
-                quantity=100,
-                images=["http://example.com"],
-                description="Smartphone device",
-            ),
-        ]
 
     @patch("src.adapters.api.product_api.get_product_service")
     def test_read_product_success(self, mock_get_product_service):

@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from src.adapters.api.category_api import create_category, list_categories
+from src.adapters.api.category_api import create_category
 from src.application.dto.category_dto import CategoryCreate, CategoryResponse
 from src.domain.entities.category_entity import CategoryEntity
 from src.domain.exceptions import EntityAlreadyExists
@@ -49,27 +49,6 @@ class TestCategoryAPI:
         )
         assert exc_info.value.status_code == 400
         assert exc_info.value.detail == "Category already exists"
-
-    @patch("src.adapters.api.category_api.get_product_service")
-    def test_list_categories(self, mock_get_product_service):
-        # Arrange
-        mock_service = MagicMock()
-        mock_category_entities = [
-            CategoryEntity(id=1, name="Electronics"),
-            CategoryEntity(id=2, name="Books"),
-        ]
-        mock_service.list_categories.return_value = mock_category_entities
-        mock_get_product_service.return_value = mock_service
-
-        # Act
-        response = list_categories(service=mock_service)
-
-        # Assert
-        mock_service.list_categories.assert_called_once()
-        assert response == [
-            CategoryResponse(id=1, name="Electronics"),
-            CategoryResponse(id=2, name="Books"),
-        ]
 
 
 if __name__ == "__main__":

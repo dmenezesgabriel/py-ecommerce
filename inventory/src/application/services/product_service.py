@@ -139,3 +139,43 @@ class ProductService:
 
     def list_categories(self) -> List[CategoryEntity]:
         return self.category_repository.list_all()
+
+    def list_products_paginated(
+        self, current_page: int, records_per_page: int
+    ):
+        (
+            products,
+            current_page,
+            records_per_page,
+            number_of_pages,
+            total_records,
+        ) = self.product_repository.list_all_paginated(
+            current_page, records_per_page
+        )
+        return (
+            products,
+            current_page,
+            records_per_page,
+            number_of_pages,
+            total_records,
+        )
+
+    def list_categories_paginated(
+        self, current_page: int, records_per_page: int
+    ):
+        (
+            categories,
+            current_page,
+            records_per_page,
+            number_of_pages,
+            total_records,
+        ) = self.category_repository.list_all_paginated(
+            current_page, records_per_page
+        )
+        return (
+            categories,
+            current_page,
+            records_per_page,
+            number_of_pages,
+            total_records,
+        )

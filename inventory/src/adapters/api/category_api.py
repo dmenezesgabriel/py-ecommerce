@@ -2,7 +2,11 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from src.adapters.dependencies import get_product_service
-from src.application.dto.category_dto import CategoryCreate, CategoryResponse
+from src.application.dto.category_dto import (
+    CategoriesPaginatedResponse,
+    CategoryCreate,
+    CategoryResponse,
+)
 from src.application.dto.serializers import serialize_category
 from src.application.services.product_service import ProductService
 from src.domain.exceptions import EntityAlreadyExists
@@ -25,8 +29,32 @@ def create_category(
 
 
 @router.get(
-    "/categories/", tags=["Categories"], response_model=List[CategoryResponse]
+    "/categories/",
+    tags=["Categories"],
+    response_model=CategoriesPaginatedResponse,
 )
-def list_categories(service: ProductService = Depends(get_product_service)):
-    categories = service.list_categories()
-    return [serialize_category(category) for category in categories]
+def list_categories_paginated(
+    current_page: int = 1,
+    records_per_page: int = 3,  # Example default value
+    service: ProductService = Depends(get_product_service),
+):
+    (
+        categories,
+        current_page,
+        records_per_page,
+        number_of_pages,
+        total_records,
+    ) = service.list_categories_paginated(current_page, records_per_page)
+
+    response = {
+        "categories": [
+            serialize_category(category) for category in categories
+        ],
+        "pagination": {
+            "current_page": current_page,
+            "records_per_page": records_per_page,
+            "number_of_pages": number_of_pages,
+            "total_records": total_records,
+        },
+    }
+    return response

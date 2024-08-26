@@ -5,6 +5,7 @@ from src.adapters.dependencies import get_product_service
 from src.application.dto.product_dto import (
     ProductCreate,
     ProductResponse,
+    ProductsPaginatedResponse,
     ProductUpdate,
 )
 from src.application.dto.serializers import serialize_product
@@ -35,11 +36,30 @@ def create_product(
 
 
 @router.get(
-    "/products/", tags=["Product"], response_model=List[ProductResponse]
+    "/products/", tags=["Product"], response_model=ProductsPaginatedResponse
 )
-def read_products(service: ProductService = Depends(get_product_service)):
-    products = service.list_products()
-    return [serialize_product(product) for product in products]
+def read_products_paginated(
+    current_page: int = 1,
+    records_per_page: int = 10,
+    service: ProductService = Depends(get_product_service),
+):
+    (
+        products,
+        current_page,
+        records_per_page,
+        number_of_pages,
+        total_records,
+    ) = service.list_products_paginated(current_page, records_per_page)
+    response = {
+        "products": [serialize_product(product) for product in products],
+        "pagination": {
+            "current_page": current_page,
+            "records_per_page": records_per_page,
+            "number_of_pages": number_of_pages,
+            "total_records": total_records,
+        },
+    }
+    return response
 
 
 @router.get(

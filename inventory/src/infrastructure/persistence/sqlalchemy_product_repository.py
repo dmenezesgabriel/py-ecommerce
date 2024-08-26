@@ -189,3 +189,43 @@ class SQLAlchemyProductRepository(ProductRepository):
                 for db_product in db_products
             ]
         return []
+
+    def list_all_paginated(self, current_page: int, records_per_page: int):
+        offset = (current_page - 1) * records_per_page
+        query = self.db.query(ProductModel)
+
+        total_records = query.count()
+        db_products = query.limit(records_per_page).offset(offset).all()
+
+        products = [
+            ProductEntity(
+                id=db_product.id,
+                sku=db_product.sku,
+                name=db_product.name,
+                category=CategoryEntity(
+                    id=db_product.category.id, name=db_product.category.name
+                ),
+                price=PriceEntity(
+                    id=db_product.price.id, amount=db_product.price.amount
+                ),
+                inventory=InventoryEntity(
+                    id=db_product.inventory.id,
+                    quantity=db_product.inventory.quantity,
+                ),
+                description=db_product.description,
+                images=db_product.images,
+            )
+            for db_product in db_products
+        ]
+
+        number_of_pages = (
+            total_records + records_per_page - 1
+        ) // records_per_page
+
+        return (
+            products,
+            current_page,
+            records_per_page,
+            number_of_pages,
+            total_records,
+        )
