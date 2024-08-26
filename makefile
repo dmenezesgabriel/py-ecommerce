@@ -13,3 +13,18 @@ apply-delivery-migrations: apply-migrations-delivery-service
 
 apply-all-migrations: apply-inventory-migrations apply-orders-migrations apply-delivery-migrations
 	echo "Applying all migrations"
+
+run-%:
+	docker compose up -d $*
+
+run-infra: run-rabbitmq run-postgres run-mongo apply-all-migrations
+	echo "Running infra"
+
+run-services: run-inventory_service run-orders_service run-payments_service run-delivery_service
+	echo "Running services"
+
+show-logs-%:
+	docker compose logs $*
+
+show-services-logs: show-logs-inventory_service show-logs-orders_service show-logs-payments_service show-logs-delivery_service
+	echo "Show logs"
