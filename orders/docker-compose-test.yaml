@@ -1,0 +1,37 @@
+include:
+  - docker-compose.yaml
+
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - .:/app/
+    command: |
+      python -m pytest tests -s -vv -x --cov . --cov-report=html:/app/reports/coverage --alluredir /app/allure-results
+    environment:
+      INVENTORY_SERVICE_BASE_URL: "http://inventory_service:8001/inventory"
+      BROKER_HOST: rabbitmq
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: order
+      DATABASE_USER: order_app
+      DATABASE_PASSWORD: 123abc
+
+  allure:
+    build:
+      context: .
+      dockerfile: Dockerfile.allure
+    volumes:
+      - .:/app/
+    ports:
+      - "35741:35741"
+
+networks:
+  orders_network:
+    driver: bridge
+
+volumes:
+  postgres_orders:
+  mongo_orders:

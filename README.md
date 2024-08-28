@@ -1,1 +1,13 @@
-https://medium.com/@buffetbenjamin/securing-fastapi-with-keycloak-the-adventure-begins-part-1-e7eae3b79946
+# Py Order System
+
+```sh
+make run-infra
+```
+
+```sh
+make run-services
+```
+
+```sh
+make show-services-logs
+```

@@ -1,0 +1,16 @@
+- [] Delivery Publisher port
+- [] IDs to UUID
+- [] Entity validations to static methods
+- [] Instead of rabbitmq in health check make generic like broker
+- [] Refactor tests to use pytest instead of unittest case, pytest + unittes.mock
+- [] Separate addres dto from delivery dto
+- [] Finish unit tests
+- [] Add integration tests
+- [] Add behaviour tests
+- [] Add Contract tests
+- [] Refactor entity validation methods to a separated function
+- [] Add logical Delete for delivery
+- [] Add customer update
+- [] Add address update
+- [] Get deliveries by customer
+- [] Pagination

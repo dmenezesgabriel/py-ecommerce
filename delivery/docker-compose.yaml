@@ -1,0 +1,76 @@
+services:
+  app:
+    hostname: delivery_service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8004:8004"
+    volumes:
+      - .:/app
+    networks:
+      - delivery_network
+    command: uvicorn main:app --host 0.0.0.0 --port 8004 --reload
+    environment:
+      ORDER_SERVICE_BASE_URL: "http://orders_service:8002/orders"
+      BROKER_HOST: rabbitmq
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: delivery
+      DATABASE_USER: delivery_app
+      DATABASE_PASSWORD: 123abc
+    depends_on:
+      # - rabbitmq
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8004/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: on-failure
+
+  rabbitmq:
+    hostname: rabbitmq
+    image: rabbitmq:3-management-alpine
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - ./conf/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./conf/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    networks:
+      - delivery_network
+
+  postgres:
+    hostname: postgres
+    container_name: ${POSTGRES_CONTAINER_NAME:-postgres}
+    image: postgres:16.0-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DATABASE=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_delivery:/var/lib/postgresql/data
+      - ./scripts/postgres:/docker-entrypoint-initdb.d
+    networks:
+      - delivery_network
+    stdin_open: true
+    tty: true
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+networks:
+  delivery_network:
+    driver: bridge
+
+volumes:
+  postgres_delivery:
+  mongo_delivery:

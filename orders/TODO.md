@@ -1,0 +1,5 @@
+- [] Add customer update
+- [] Get orders by customer
+- [] Pagination
+- [] Get Orders by status
+- [] Move calculate order total to service

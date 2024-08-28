@@ -1,0 +1,39 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: inventory-service
+    host: inventory_service
+    port: 8001
+    protocol: http
+    routes:
+      - name: inventory-route
+        paths:
+          - /inventory
+
+  - name: orders-service
+    host: orders_service
+    port: 8002
+    protocol: http
+    routes:
+      - name: orders-route
+        paths:
+          - /orders
+
+  - name: payments-service
+    host: payments_service
+    port: 8003
+    protocol: http
+    routes:
+      - name: payments-route
+        paths:
+          - /payments
+
+  - name: delivery-service
+    host: delivery_service
+    port: 8004
+    protocol: http
+    routes:
+      - name: delivery-route
+        paths:
+          - /delivery
