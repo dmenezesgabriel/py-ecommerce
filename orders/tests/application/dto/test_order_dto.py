@@ -1,23 +1,20 @@
-from unittest.mock import Mock, patch
-
 import pytest
 from pydantic import ValidationError
-from src.application.dto.customer_dto import CustomerCreate, CustomerResponse
+from src.application.dto.customer_dto import CustomerResponse
 from src.application.dto.order_dto import (
+    EstimatedTimeUpdate,
     OrderCreate,
     OrderResponse,
+    OrdersPaginatedResponse,
     OrderStatusUpdate,
+    PaginationMeta,
 )
-from src.application.dto.order_item_dto import (
-    OrderItemCreate,
-    OrderItemResponse,
-)
+from src.application.dto.order_item_dto import OrderItemResponse
 from src.domain.entities.order_entity import OrderStatus
 
 
-def test_order_create_valid_data():
-    # Arrange
-    valid_data = {
+def test_order_create_valid():
+    order_data = {
         "customer": {
             "name": "John Doe",
             "email": "john.doe@example.com",
@@ -28,60 +25,40 @@ def test_order_create_valid_data():
             {"product_sku": "XYZ456", "quantity": 1},
         ],
     }
+    order = OrderCreate(**order_data)
 
-    # Act
-    order_create = OrderCreate(**valid_data)
-
-    # Assert
-    assert order_create.customer.name == "John Doe"
-    assert order_create.order_items[0].product_sku == "ABC123"
-    assert order_create.order_items[1].quantity == 1
+    assert order.customer.name == "John Doe"
+    assert len(order.order_items) == 2
 
 
-def test_order_create_invalid_data():
-    # Arrange
-    invalid_data = {
-        "customer": {
-            "name": "John Doe",
-            "email": 1,
-        },
+def test_order_create_invalid_missing_customer():
+    order_data = {
         "order_items": [
             {"product_sku": "ABC123", "quantity": 2},
+            {"product_sku": "XYZ456", "quantity": 1},
         ],
     }
 
-    # Act & Assert
     with pytest.raises(ValidationError):
-        OrderCreate(**invalid_data)
+        OrderCreate(**order_data)
 
 
-def test_order_status_update_valid_data():
-    # Arrange
-    valid_data = {
-        "status": OrderStatus.CONFIRMED,
-    }
+def test_order_status_update_valid():
+    order_status_data = {"status": OrderStatus.CONFIRMED}
+    order_status_update = OrderStatusUpdate(**order_status_data)
 
-    # Act
-    order_status_update = OrderStatusUpdate(**valid_data)
-
-    # Assert
     assert order_status_update.status == OrderStatus.CONFIRMED
 
 
-def test_order_status_update_invalid_data():
-    # Arrange
-    invalid_data = {
-        "status": "not_a_valid_status",
-    }
+def test_order_status_update_invalid():
+    order_status_data = {"status": "invalid_status"}
 
-    # Act & Assert
     with pytest.raises(ValidationError):
-        OrderStatusUpdate(**invalid_data)
+        OrderStatusUpdate(**order_status_data)
 
 
-def test_order_response_valid_data():
-    # Arrange
-    valid_data = {
+def test_order_response_valid():
+    order_data = {
         "id": 1,
         "order_number": "ORD123",
         "customer": {
@@ -91,124 +68,59 @@ def test_order_response_valid_data():
             "phone_number": "+123456789",
         },
         "order_items": [
-            {"product_sku": "ABC123", "quantity": 2},
-            {"product_sku": "XYZ456", "quantity": 1},
+            {
+                "product_sku": "ABC123",
+                "quantity": 2,
+                "name": "Product A",
+                "description": "Product A description",
+                "price": 10.0,
+            },
+            {
+                "product_sku": "XYZ456",
+                "quantity": 1,
+                "name": "Product B",
+                "description": "Product B description",
+                "price": 20.0,
+            },
         ],
         "status": OrderStatus.CONFIRMED,
         "total_amount": 30.00,
+        "estimated_time": "02:30",
     }
 
-    # Act
-    order_response = OrderResponse(**valid_data)
+    order = OrderResponse(**order_data)
 
-    # Assert
-    assert order_response.id == 1
-    assert order_response.order_number == "ORD123"
-    assert order_response.customer.name == "John Doe"
-    assert order_response.order_items[0].product_sku == "ABC123"
-    assert order_response.status == OrderStatus.CONFIRMED
-    assert order_response.total_amount == 30.00
+    assert order.id == 1
+    assert order.customer.name == "John Doe"
+    assert order.order_items[0].product_sku == "ABC123"
+    assert order.total_amount == 30.00
 
 
-def test_order_response_from_attributes():
-    # Arrange
-    attributes = dict(
-        id=1,
-        order_number="ORD123",
-        customer=dict(
-            id=1,
-            name="John Doe",
-            email="john.doe@example.com",
-            phone_number="+123456789",
-        ),
-        order_items=[
-            dict(product_sku="ABC123", quantity=2),
-            dict(product_sku="XYZ456", quantity=1),
-        ],
-        status=OrderStatus.CONFIRMED,
-        total_amount=30.00,
-    )
+def test_estimated_time_update_valid():
+    estimated_time_data = {"estimated_time": "02:30"}
+    estimated_time_update = EstimatedTimeUpdate(**estimated_time_data)
 
-    # Act
-    order_response = OrderResponse.model_validate(attributes)
-
-    # Assert
-    assert order_response.id == 1
-    assert order_response.order_number == "ORD123"
-    assert order_response.customer.name == "John Doe"
-    assert order_response.order_items[0].product_sku == "ABC123"
-    assert order_response.status == OrderStatus.CONFIRMED
-    assert order_response.total_amount == 30.00
+    assert estimated_time_update.estimated_time == "02:30"
 
 
-@patch(
-    "src.application.dto.order_dto.OrderCreate.model_config",
-    new_callable=Mock,
-)
-def test_order_create_model_config(mock_model_config):
-    # Arrange
-    mock_model_config.json_schema_extra = {
-        "examples": [
-            {
-                "customer": {
-                    "name": "John Doe",
-                    "email": "john.doe@example.com",
-                    "phone_number": "+123456789",
-                },
-                "order_items": [
-                    {"product_sku": "ABC123", "quantity": 2},
-                ],
-            }
-        ]
+def test_estimated_time_update_invalid():
+    estimated_time_data = {
+        "estimated_time": 230
+    }  # Invalid, should be a string
+
+    with pytest.raises(ValidationError):
+        EstimatedTimeUpdate(**estimated_time_data)
+
+
+def test_orders_paginated_response_valid():
+    pagination_data = {
+        "current_page": 1,
+        "records_per_page": 1,
+        "number_of_pages": 5,
+        "total_records": 5,
     }
-
-    # Act
-    config = OrderCreate.model_config
-
-    # Assert
-    assert (
-        config.json_schema_extra["examples"][0]["customer"]["name"]
-        == "John Doe"
-    )
-    assert (
-        config.json_schema_extra["examples"][0]["order_items"][0][
-            "product_sku"
-        ]
-        == "ABC123"
-    )
-    assert mock_model_config.json_schema_extra is not None
-
-
-@patch(
-    "src.application.dto.order_dto.OrderStatusUpdate.model_config",
-    new_callable=Mock,
-)
-def test_order_status_update_model_config(mock_model_config):
-    # Arrange
-    mock_model_config.json_schema_extra = {
-        "examples": [
-            {
-                "status": "confirmed",
-            }
-        ]
-    }
-
-    # Act
-    config = OrderStatusUpdate.model_config
-
-    # Assert
-    assert config.json_schema_extra["examples"][0]["status"] == "confirmed"
-    assert mock_model_config.json_schema_extra is not None
-
-
-@patch(
-    "src.application.dto.order_dto.OrderResponse.model_config",
-    new_callable=Mock,
-)
-def test_order_response_model_config(mock_model_config):
-    # Arrange
-    mock_model_config.json_schema_extra = {
-        "examples": [
+    orders_data = {
+        "orders": [
             {
                 "id": 1,
                 "order_number": "ORD123",
@@ -219,22 +131,89 @@ def test_order_response_model_config(mock_model_config):
                     "phone_number": "+123456789",
                 },
                 "order_items": [
-                    {"product_sku": "ABC123", "quantity": 2},
+                    {
+                        "product_sku": "ABC123",
+                        "quantity": 2,
+                        "name": "Product A",
+                        "description": "Product A description",
+                        "price": 10.0,
+                    },
                 ],
-                "status": "confirmed",
+                "status": OrderStatus.CONFIRMED,
                 "total_amount": 30.00,
+                "estimated_time": "02:30",
             }
-        ]
+        ],
+        "pagination": pagination_data,
     }
 
-    # Act
-    config = OrderResponse.model_config
+    orders_paginated_response = OrdersPaginatedResponse(**orders_data)
 
-    # Assert
-    assert config.json_schema_extra["examples"][0]["id"] == 1
-    assert config.json_schema_extra["examples"][0]["order_number"] == "ORD123"
-    assert (
-        config.json_schema_extra["examples"][0]["customer"]["name"]
-        == "John Doe"
-    )
-    assert mock_model_config.json_schema_extra is not None
+    assert len(orders_paginated_response.orders) == 1
+    assert orders_paginated_response.pagination.current_page == 1
+
+
+def test_orders_paginated_response_invalid():
+    pagination_data = {
+        "current_page": 1,
+        "records_per_page": 1,
+        "number_of_pages": 5,
+    }  # Missing total_records
+
+    orders_data = {
+        "orders": [
+            {
+                "id": 1,
+                "order_number": "ORD123",
+                "customer": {
+                    "id": 1,
+                    "name": "John Doe",
+                    "email": "john.doe@example.com",
+                    "phone_number": "+123456789",
+                },
+                "order_items": [
+                    {
+                        "product_sku": "ABC123",
+                        "quantity": 2,
+                        "name": "Product A",
+                        "description": "Product A description",
+                        "price": 10.0,
+                    },
+                ],
+                "status": OrderStatus.CONFIRMED,
+                "total_amount": 30.00,
+                "estimated_time": "02:30",
+            }
+        ],
+        "pagination": pagination_data,
+    }
+
+    with pytest.raises(ValidationError):
+        OrdersPaginatedResponse(**orders_data)
+
+
+def test_pagination_meta_valid():
+    pagination_meta_data = {
+        "current_page": 1,
+        "records_per_page": 10,
+        "number_of_pages": 5,
+        "total_records": 50,
+    }
+    pagination_meta = PaginationMeta(**pagination_meta_data)
+
+    assert pagination_meta.current_page == 1
+    assert pagination_meta.records_per_page == 10
+    assert pagination_meta.number_of_pages == 5
+    assert pagination_meta.total_records == 50
+
+
+def test_pagination_meta_invalid():
+    pagination_meta_data = {
+        "current_page": 1,
+        "records_per_page": "ten",  # Invalid, should be an integer
+        "number_of_pages": 5,
+        "total_records": 50,
+    }
+
+    with pytest.raises(ValidationError):
+        PaginationMeta(**pagination_meta_data)

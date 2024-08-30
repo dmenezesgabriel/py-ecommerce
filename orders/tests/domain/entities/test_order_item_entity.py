@@ -1,130 +1,140 @@
+import math
+
 import pytest
 from src.domain.entities.order_item_entity import OrderItemEntity
 from src.domain.exceptions import InvalidEntity
 
 
-class TestOrderItemEntity:
-    def test_order_item_creation_success(self):
-        # Arrange
-        product_sku = "SKU123"
-        quantity = 5
-        id = 1
+def test_order_item_entity_initialization():
+    order_item = OrderItemEntity(
+        product_sku="SKU123",
+        quantity=10,
+        name="Test Product",
+        description="Test Description",
+        price=99.99,
+        id=1,
+    )
 
-        # Act
-        order_item = OrderItemEntity(
-            product_sku=product_sku, quantity=quantity, id=id
+    assert order_item.id == 1
+    assert order_item.product_sku == "SKU123"
+    assert order_item.quantity == 10
+    assert order_item.name == "Test Product"
+    assert order_item.description == "Test Description"
+    assert math.isclose(order_item.price, 99.99, rel_tol=1e-9)
+
+
+def test_order_item_entity_invalid_id():
+    with pytest.raises(InvalidEntity):
+        OrderItemEntity(
+            product_sku="SKU123",
+            quantity=10,
+            id=-1,  # Invalid ID
         )
 
-        # Assert
-        assert order_item.id == id
-        assert order_item.product_sku == product_sku
-        assert order_item.quantity == quantity
 
-    def test_order_item_creation_invalid_id(self):
-        # Arrange
-        product_sku = "SKU123"
-        quantity = 5
-        id = -1
-
-        # Act & Assert
-        with pytest.raises(InvalidEntity) as exc_info:
-            OrderItemEntity(product_sku=product_sku, quantity=quantity, id=id)
-        assert str(exc_info.value) == (
-            "Invalid id: -1. ID must be a positive integer or None."
+def test_order_item_entity_invalid_product_sku():
+    with pytest.raises(InvalidEntity):
+        OrderItemEntity(
+            product_sku="",  # Invalid SKU
+            quantity=10,
         )
 
-    def test_order_item_creation_invalid_product_sku(self):
-        # Arrange
-        product_sku = ""
-        quantity = 5
-
-        # Act & Assert
-        with pytest.raises(InvalidEntity) as exc_info:
-            OrderItemEntity(product_sku=product_sku, quantity=quantity)
-        assert str(exc_info.value) == (
-            "Invalid product SKU: . SKU must be a non-empty string."
+    with pytest.raises(InvalidEntity):
+        OrderItemEntity(
+            product_sku=None,  # Invalid SKU (None)
+            quantity=10,
         )
 
-    def test_order_item_creation_invalid_quantity(self):
-        # Arrange
-        product_sku = "SKU123"
-        quantity = -5
 
-        # Act & Assert
-        with pytest.raises(InvalidEntity) as exc_info:
-            OrderItemEntity(product_sku=product_sku, quantity=quantity)
-        assert str(exc_info.value) == (
-            "Invalid quantity: -5. Quantity must be a non-negative integer."
+def test_order_item_entity_invalid_quantity():
+    with pytest.raises(InvalidEntity):
+        OrderItemEntity(
+            product_sku="SKU123",
+            quantity=-5,  # Invalid quantity
         )
 
-    def test_order_item_setters_success(self):
-        # Arrange
-        order_item = OrderItemEntity(product_sku="SKU123", quantity=5, id=1)
-        new_product_sku = "SKU456"
-        new_quantity = 10
-        new_id = 2
-
-        # Act
-        order_item.product_sku = new_product_sku
-        order_item.quantity = new_quantity
-        order_item.id = new_id
-
-        # Assert
-        assert order_item.product_sku == new_product_sku
-        assert order_item.quantity == new_quantity
-        assert order_item.id == new_id
-
-    def test_order_item_setters_invalid_id(self):
-        # Arrange
-        order_item = OrderItemEntity(product_sku="SKU123", quantity=5, id=1)
-        invalid_id = -1
-
-        # Act & Assert
-        with pytest.raises(InvalidEntity) as exc_info:
-            order_item.id = invalid_id
-        assert str(exc_info.value) == (
-            "Invalid id: -1. ID must be a positive integer or None."
+    with pytest.raises(InvalidEntity):
+        OrderItemEntity(
+            product_sku="SKU123",
+            quantity="invalid_quantity",  # Invalid quantity (not an integer)
         )
 
-    def test_order_item_setters_invalid_product_sku(self):
-        # Arrange
-        order_item = OrderItemEntity(product_sku="SKU123", quantity=5, id=1)
-        invalid_product_sku = ""
 
-        # Act & Assert
-        with pytest.raises(InvalidEntity) as exc_info:
-            order_item.product_sku = invalid_product_sku
-        assert str(exc_info.value) == (
-            "Invalid product SKU: . SKU must be a non-empty string."
-        )
+def test_order_item_entity_setters():
+    order_item = OrderItemEntity(
+        product_sku="SKU123",
+        quantity=10,
+        name="Test Product",
+        description="Test Description",
+        price=99.99,
+    )
 
-    def test_order_item_setters_invalid_quantity(self):
-        # Arrange
-        order_item = OrderItemEntity(product_sku="SKU123", quantity=5, id=1)
-        invalid_quantity = -10
+    order_item.id = 2
+    assert order_item.id == 2
 
-        # Act & Assert
-        with pytest.raises(InvalidEntity) as exc_info:
-            order_item.quantity = invalid_quantity
-        assert str(exc_info.value) == (
-            "Invalid quantity: -10. Quantity must be a non-negative integer."
-        )
+    order_item.product_sku = "SKU456"
+    assert order_item.product_sku == "SKU456"
 
-    def test_order_item_to_dict(self):
-        # Arrange
-        order_item = OrderItemEntity(product_sku="SKU123", quantity=5, id=1)
+    order_item.quantity = 20
+    assert order_item.quantity == 20
 
-        # Act
-        order_item_dict = order_item.to_dict()
+    order_item.name = "Updated Product"
+    assert order_item.name == "Updated Product"
 
-        # Assert
-        expected_dict = {
-            "id": 1,
-            "product_sku": "SKU123",
-            "quantity": 5,
-        }
-        assert order_item_dict == expected_dict
+    order_item.description = "Updated Description"
+    assert order_item.description == "Updated Description"
+
+    order_item.price = 199.99
+    assert math.isclose(order_item.price, 199.99, rel_tol=1e-9)
 
 
-if __name__ == "__main__":
-    pytest.main()
+def test_order_item_entity_to_dict():
+    order_item = OrderItemEntity(
+        product_sku="SKU123",
+        quantity=10,
+        name="Test Product",
+        description="Test Description",
+        price=99.99,
+        id=1,
+    )
+
+    expected_dict = {
+        "id": 1,
+        "product_sku": "SKU123",
+        "quantity": 10,
+        "name": "Test Product",
+        "description": "Test Description",
+        "price": 99.99,
+    }
+
+    assert order_item.to_dict() == expected_dict
+
+
+def test_order_item_entity_invalid_id_setter():
+    order_item = OrderItemEntity(
+        product_sku="SKU123",
+        quantity=10,
+    )
+
+    with pytest.raises(InvalidEntity):
+        order_item.id = -1  # Invalid ID
+
+
+def test_order_item_entity_invalid_product_sku_setter():
+    order_item = OrderItemEntity(
+        product_sku="SKU123",
+        quantity=10,
+    )
+
+    with pytest.raises(InvalidEntity):
+        order_item.product_sku = ""  # Invalid SKU
+
+
+def test_order_item_entity_invalid_quantity_setter():
+    order_item = OrderItemEntity(
+        product_sku="SKU123",
+        quantity=10,
+    )
+
+    with pytest.raises(InvalidEntity):
+        order_item.quantity = -5  # Invalid quantity

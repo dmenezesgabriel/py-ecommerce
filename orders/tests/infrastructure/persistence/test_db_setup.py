@@ -5,10 +5,10 @@ from unittest.mock import MagicMock, patch
 class TestDBSetup(unittest.TestCase):
 
     @patch("src.infrastructure.persistence.db_setup.SessionLocal")
-    def test_get_db(self, mock_SessionLocal):
+    def test_get_db(self, mock_session_local):
         # Arrange
         mock_db_instance = MagicMock()
-        mock_SessionLocal.return_value = mock_db_instance
+        mock_session_local.return_value = mock_db_instance
 
         # Act
         from src.infrastructure.persistence.db_setup import get_db
@@ -17,7 +17,7 @@ class TestDBSetup(unittest.TestCase):
         db = next(gen)
 
         # Assert
-        mock_SessionLocal.assert_called_once()
+        mock_session_local.assert_called_once()
         self.assertEqual(db, mock_db_instance)
 
         # Act

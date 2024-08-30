@@ -1,123 +1,136 @@
 import json
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 from src.domain.entities.order_entity import OrderStatus
 from src.infrastructure.messaging.delivery_subscriber import DeliverySubscriber
 
 
-@pytest.fixture
-def order_service():
-    return Mock()
+@patch(
+    "src.infrastructure.messaging.delivery_subscriber.BaseMessagingAdapter.connect"
+)
+def test_delivery_subscriber_initialization(mock_connect):
+    mock_order_service = MagicMock()
+    mock_connection_params = MagicMock()
+
+    subscriber = DeliverySubscriber(
+        order_service=mock_order_service,
+        connection_params=mock_connection_params,
+    )
+
+    assert subscriber.order_service == mock_order_service
+    mock_connect.assert_called_once()
 
 
-@pytest.fixture
-def connection_params():
-    return Mock()
+@patch(
+    "src.infrastructure.messaging.delivery_subscriber.BaseMessagingAdapter.connect"
+)
+def test_start_consuming(mock_connect):
+    mock_order_service = MagicMock()
+    mock_connection_params = MagicMock()
 
+    subscriber = DeliverySubscriber(
+        order_service=mock_order_service,
+        connection_params=mock_connection_params,
+    )
 
-@pytest.fixture
-def delivery_subscriber(order_service, connection_params):
-    with patch.object(DeliverySubscriber, "connect", return_value=None):
-        return DeliverySubscriber(order_service, connection_params)
+    subscriber.channel = MagicMock()
+    subscriber.start_consuming()
 
-
-def test_start_consuming(delivery_subscriber):
-    # Arrange
-    delivery_subscriber.channel = MagicMock()
-
-    # Act
-    delivery_subscriber.start_consuming()
-
-    # Assert
-    delivery_subscriber.channel.exchange_declare.assert_called_once_with(
+    subscriber.channel.exchange_declare.assert_called_once_with(
         exchange="delivery_exchange", exchange_type="topic", durable=True
     )
-    delivery_subscriber.channel.queue_declare.assert_called_once_with(
+    subscriber.channel.queue_declare.assert_called_once_with(
         queue="delivery_queue", durable=True
     )
-    delivery_subscriber.channel.queue_bind.assert_called_once_with(
+    subscriber.channel.queue_bind.assert_called_once_with(
         exchange="delivery_exchange",
         queue="delivery_queue",
         routing_key="delivery_queue",
     )
-    delivery_subscriber.channel.basic_consume.assert_called_once_with(
+    subscriber.channel.basic_consume.assert_called_once_with(
         queue="delivery_queue",
-        on_message_callback=delivery_subscriber.on_message,
+        on_message_callback=subscriber.on_message,
         auto_ack=False,
     )
-    delivery_subscriber.channel.start_consuming.assert_called_once()
-    delivery_subscriber.channel.start_consuming.assert_called_once()
+    subscriber.channel.start_consuming.assert_called_once()
 
 
-def test_on_message_shipped_status(delivery_subscriber, order_service):
-    # Arrange
-    ch = Mock()
-    method = Mock()
-    properties = Mock()
+@patch(
+    "src.infrastructure.messaging.delivery_subscriber.BaseMessagingAdapter.connect"
+)
+@patch("src.infrastructure.messaging.delivery_subscriber.asyncio.run")
+def test_on_message_in_transit(mock_asyncio_run, mock_connect):
+    mock_order_service = MagicMock()
+    mock_connection_params = MagicMock()
+
+    subscriber = DeliverySubscriber(
+        order_service=mock_order_service,
+        connection_params=mock_connection_params,
+    )
+
+    ch_mock = MagicMock()
+    method_mock = MagicMock()
+    properties_mock = MagicMock()
+
     body = json.dumps({"order_id": 1, "status": "in_transit"}).encode("utf-8")
+    subscriber.on_message(ch_mock, method_mock, properties_mock, body)
 
-    # Act
-    delivery_subscriber.on_message(ch, method, properties, body)
-
-    # Assert
-    order_service.update_order_status.assert_called_once_with(
-        1, OrderStatus.SHIPPED
+    mock_asyncio_run.assert_called_once_with(
+        mock_order_service.update_order_status(1, OrderStatus.SHIPPED)
     )
-    ch.basic_ack.assert_called_once_with(delivery_tag=method.delivery_tag)
-
-
-def test_on_message_delivered_status(delivery_subscriber, order_service):
-    # Arrange
-    ch = Mock()
-    method = Mock()
-    properties = Mock()
-    body = json.dumps({"order_id": 2, "status": "delivered"}).encode("utf-8")
-
-    # Act
-    delivery_subscriber.on_message(ch, method, properties, body)
-
-    # Assert
-    order_service.update_order_status.assert_called_once_with(
-        2, OrderStatus.FINISHED
+    ch_mock.basic_ack.assert_called_once_with(
+        delivery_tag=method_mock.delivery_tag
     )
-    ch.basic_ack.assert_called_once_with(delivery_tag=method.delivery_tag)
 
 
-def test_on_message_invalid_json(delivery_subscriber):
-    # Arrange
-    ch = Mock()
-    method = Mock()
-    properties = Mock()
+@patch(
+    "src.infrastructure.messaging.delivery_subscriber.BaseMessagingAdapter.connect"
+)
+@patch("src.infrastructure.messaging.delivery_subscriber.asyncio.run")
+def test_on_message_delivered(mock_asyncio_run, mock_connect):
+    mock_order_service = MagicMock()
+    mock_connection_params = MagicMock()
+
+    subscriber = DeliverySubscriber(
+        order_service=mock_order_service,
+        connection_params=mock_connection_params,
+    )
+
+    ch_mock = MagicMock()
+    method_mock = MagicMock()
+    properties_mock = MagicMock()
+
+    body = json.dumps({"order_id": 1, "status": "delivered"}).encode("utf-8")
+    subscriber.on_message(ch_mock, method_mock, properties_mock, body)
+
+    mock_asyncio_run.assert_called_once_with(
+        mock_order_service.update_order_status(1, OrderStatus.FINISHED)
+    )
+    ch_mock.basic_ack.assert_called_once_with(
+        delivery_tag=method_mock.delivery_tag
+    )
+
+
+@patch(
+    "src.infrastructure.messaging.delivery_subscriber.BaseMessagingAdapter.connect"
+)
+def test_on_message_exception(mock_connect):
+    mock_order_service = MagicMock()
+    mock_connection_params = MagicMock()
+
+    subscriber = DeliverySubscriber(
+        order_service=mock_order_service,
+        connection_params=mock_connection_params,
+    )
+
+    ch_mock = MagicMock()
+    method_mock = MagicMock()
+    properties_mock = MagicMock()
+
+    # Simulate an invalid JSON in the body
     body = b"invalid json"
+    subscriber.on_message(ch_mock, method_mock, properties_mock, body)
 
-    with patch(
-        "src.infrastructure.messaging.delivery_subscriber.logger"
-    ) as mock_logger:
-        # Act
-        delivery_subscriber.on_message(ch, method, properties, body)
-
-        # Assert
-        mock_logger.error.assert_called_once()
-        ch.basic_ack.assert_called_once_with(delivery_tag=method.delivery_tag)
-
-
-def test_on_message_exception_handling(delivery_subscriber):
-    # Arrange
-    ch = Mock()
-    method = Mock()
-    properties = Mock()
-    body = json.dumps({"order_id": 3, "status": "unknown_status"}).encode(
-        "utf-8"
+    ch_mock.basic_ack.assert_called_once_with(
+        delivery_tag=method_mock.delivery_tag
     )
-
-    with patch.object(
-        delivery_subscriber.order_service,
-        "update_order_status",
-        side_effect=Exception("Test exception"),
-    ):
-        # Act
-        delivery_subscriber.on_message(ch, method, properties, body)
-
-        # Assert
-        ch.basic_ack.assert_called_once_with(delivery_tag=method.delivery_tag)

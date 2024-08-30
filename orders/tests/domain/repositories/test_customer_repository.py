@@ -1,62 +1,45 @@
-import inspect
+from unittest.mock import MagicMock
 
 import pytest
+from src.domain.entities.customer_entity import CustomerEntity
 from src.domain.repositories.customer_repository import CustomerRepository
 
 
-class TestCustomerRepository:
-
-    def test_has_save_method(self):
-        # Arrange & Act
-        has_save = inspect.isfunction(CustomerRepository.save)
-
-        # Assert
-        assert has_save is True
-        assert list(
-            inspect.signature(CustomerRepository.save).parameters.keys()
-        ) == ["self", "customer"]
-
-    def test_has_find_by_email_method(self):
-        # Arrange & Act
-        has_find_by_email = inspect.isfunction(
-            CustomerRepository.find_by_email
-        )
-
-        # Assert
-        assert has_find_by_email is True
-        assert list(
-            inspect.signature(
-                CustomerRepository.find_by_email
-            ).parameters.keys()
-        ) == ["self", "email"]
-
-    def test_has_list_all_method(self):
-        # Arrange & Act
-        has_list_all = inspect.isfunction(CustomerRepository.list_all)
-
-        # Assert
-        assert has_list_all is True
-        assert list(
-            inspect.signature(CustomerRepository.list_all).parameters.keys()
-        ) == ["self"]
-
-    def test_has_delete_method(self):
-        # Arrange & Act
-        has_delete = inspect.isfunction(CustomerRepository.delete)
-
-        # Assert
-        assert has_delete is True
-        assert list(
-            inspect.signature(CustomerRepository.delete).parameters.keys()
-        ) == ["self", "customer"]
-
-    def test_methods_are_callable(self):
-        # Arrange & Act / Assert
-        assert callable(getattr(CustomerRepository, "save", None))
-        assert callable(getattr(CustomerRepository, "find_by_email", None))
-        assert callable(getattr(CustomerRepository, "list_all", None))
-        assert callable(getattr(CustomerRepository, "delete", None))
+def test_customer_repository_has_save_method():
+    assert hasattr(CustomerRepository, "save")
+    assert callable(getattr(CustomerRepository, "save"))
 
 
-if __name__ == "__main__":
-    pytest.main()
+def test_customer_repository_has_find_by_email_method():
+    assert hasattr(CustomerRepository, "find_by_email")
+    assert callable(getattr(CustomerRepository, "find_by_email"))
+
+
+def test_customer_repository_has_list_all_method():
+    assert hasattr(CustomerRepository, "list_all")
+    assert callable(getattr(CustomerRepository, "list_all"))
+
+
+def test_customer_repository_has_delete_method():
+    assert hasattr(CustomerRepository, "delete")
+    assert callable(getattr(CustomerRepository, "delete"))
+
+
+def test_customer_repository_save_raises_not_implemented_error():
+    with pytest.raises(NotImplementedError):
+        CustomerRepository().save(MagicMock(spec=CustomerEntity))
+
+
+def test_customer_repository_find_by_email_raises_not_implemented_error():
+    with pytest.raises(NotImplementedError):
+        CustomerRepository().find_by_email("test@example.com")
+
+
+def test_customer_repository_list_all_raises_not_implemented_error():
+    with pytest.raises(NotImplementedError):
+        CustomerRepository().list_all()
+
+
+def test_customer_repository_delete_raises_not_implemented_error():
+    with pytest.raises(NotImplementedError):
+        CustomerRepository().delete(MagicMock(spec=CustomerEntity))

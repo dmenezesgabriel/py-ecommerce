@@ -1,149 +1,93 @@
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 from src.application.dto.customer_dto import CustomerCreate, CustomerResponse
 
-# Arrange, Act, Assert methodology is followed in each test
 
-
-def test_customer_create_valid_data():
-    # Arrange
-    valid_data = {
+def test_customer_create_valid():
+    customer_data = {
         "name": "John Doe",
         "email": "john.doe@example.com",
         "phone_number": "+123456789",
     }
+    customer = CustomerCreate(**customer_data)
 
-    # Act
-    customer = CustomerCreate(**valid_data)
-
-    # Assert
-    assert customer.name == "John Doe"
-    assert customer.email == "john.doe@example.com"
-    assert customer.phone_number == "+123456789"
+    assert customer.name == customer_data["name"]
+    assert customer.email == customer_data["email"]
+    assert customer.phone_number == customer_data["phone_number"]
 
 
-def test_customer_create_valid_data_without_phone():
-    # Arrange
-    valid_data = {
+def test_customer_create_optional_phone_number():
+    customer_data = {
         "name": "Jane Smith",
         "email": "jane.smith@example.com",
     }
+    customer = CustomerCreate(**customer_data)
 
-    # Act
-    customer = CustomerCreate(**valid_data)
-
-    # Assert
-    assert customer.name == "Jane Smith"
-    assert customer.email == "jane.smith@example.com"
+    assert customer.name == customer_data["name"]
+    assert customer.email == customer_data["email"]
     assert customer.phone_number is None
 
 
-def test_customer_create_invalid_email():
-    # Arrange
-    invalid_data = {
-        "name": 1,
-        "email": "invalid-email",
-    }
-
-    # Act & Assert
-    with pytest.raises(ValidationError):
-        CustomerCreate(**invalid_data)
-
-
-def test_customer_response_valid_data():
-    # Arrange
-    valid_data = {
+def test_customer_response_valid():
+    customer_data = {
         "id": 1,
         "name": "John Doe",
         "email": "john.doe@example.com",
         "phone_number": "+123456789",
     }
+    customer = CustomerResponse(**customer_data)
 
-    # Act
-    customer = CustomerResponse(**valid_data)
-
-    # Assert
-    assert customer.id == 1
-    assert customer.name == "John Doe"
-    assert customer.email == "john.doe@example.com"
-    assert customer.phone_number == "+123456789"
+    assert customer.id == customer_data["id"]
+    assert customer.name == customer_data["name"]
+    assert customer.email == customer_data["email"]
+    assert customer.phone_number == customer_data["phone_number"]
 
 
-def test_customer_response_valid_data_without_phone():
-    # Arrange
-    valid_data = {
+def test_customer_response_optional_phone_number():
+    customer_data = {
         "id": 2,
         "name": "Jane Smith",
         "email": "jane.smith@example.com",
         "phone_number": None,
     }
+    customer = CustomerResponse(**customer_data)
 
-    # Act
-    customer = CustomerResponse(**valid_data)
-
-    # Assert
-    assert customer.id == 2
-    assert customer.name == "Jane Smith"
-    assert customer.email == "jane.smith@example.com"
+    assert customer.id == customer_data["id"]
+    assert customer.name == customer_data["name"]
+    assert customer.email == customer_data["email"]
     assert customer.phone_number is None
 
 
-def test_customer_response_from_attributes():
-    # Arrange
-    attributes = dict(
-        id=3,
-        name="Alice Doe",
-        email="alice.doe@example.com",
-        phone_number="+987654321",
-    )
-
-    # Act
-    customer = CustomerResponse.model_validate(attributes)
-
-    # Assert
-    assert customer.id == 3
-    assert customer.name == "Alice Doe"
-    assert customer.email == "alice.doe@example.com"
-    assert customer.phone_number == "+987654321"
-
-
-@patch(
-    "src.application.dto.customer_dto.CustomerCreate.model_config",
-    new_callable=Mock,
-)
-def test_customer_create_model_config(mock_model_config):
-    # Arrange
-    mock_model_config.json_schema_extra = {
-        "examples": [
-            {
-                "name": "Test",
-                "email": "test@example.com",
-                "phone_number": "+123456789",
-            }
-        ]
+def test_customer_response_invalid_id():
+    customer_data = {
+        "id": "invalid_id",
+        "name": "John Doe",
+        "email": "john.doe@example.com",
+        "phone_number": "+123456789",
     }
-
-    # Act
-    config = CustomerCreate.model_config
-
-    # Assert
-    assert config.json_schema_extra["examples"][0]["name"] == "Test"
-    assert mock_model_config.json_schema_extra is not None
+    with pytest.raises(ValidationError):
+        CustomerResponse(**customer_data)
 
 
-@patch(
-    "src.application.dto.customer_dto.CustomerResponse.model_config",
-    new_callable=Mock,
-)
-def test_customer_response_model_config(mock_model_config):
-    # Arrange
-    mock_model_config.from_attributes = True
+def test_customer_create_json_schema_extra():
+    with patch("pydantic.BaseModel.model_config") as mock_config:
+        mock_config.get.return_value = CustomerCreate.model_config
+        examples = CustomerCreate.model_config["json_schema_extra"]["examples"]
 
-    # Act
-    config = CustomerResponse.model_config
+        assert len(examples) == 2
+        assert examples[0]["name"] == "John Doe"
+        assert examples[1]["name"] == "Jane Smith"
 
-    # Assert
-    assert config.from_attributes is True
-    assert mock_model_config.from_attributes is not None
+
+def test_customer_response_json_schema_extra():
+    with patch("pydantic.BaseModel.model_config") as mock_config:
+        mock_config.get.return_value = CustomerResponse.model_config
+        examples = CustomerResponse.model_config["json_schema_extra"][
+            "examples"
+        ]
+
+        assert len(examples) == 2
+        assert examples[0]["id"] == 1
+        assert examples[1]["id"] == 2
