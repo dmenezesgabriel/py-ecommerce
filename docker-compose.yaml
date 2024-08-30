@@ -67,7 +67,7 @@ services:
     hostname: payments_service
     build:
       context: ./payments
-      dockerfile: Dockerfile.payments
+      dockerfile: Dockerfile
     ports:
       - "8003:8003"
     volumes:

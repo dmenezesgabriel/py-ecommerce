@@ -37,11 +37,3 @@ services:
       - .:/app/
     ports:
       - "35741:35741"
-
-networks:
-  inventory_network:
-    driver: bridge
-
-volumes:
-  postgres_inventory:
-  mongo_inventory:

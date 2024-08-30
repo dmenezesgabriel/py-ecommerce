@@ -10,8 +10,8 @@ class PaymentCreate(BaseModel):
     amount: float
     status: PaymentStatus
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "order_id": 1,
@@ -25,6 +25,7 @@ class PaymentCreate(BaseModel):
                 },
             ]
         }
+    }
 
 
 class PaymentUpdate(BaseModel):
@@ -32,8 +33,8 @@ class PaymentUpdate(BaseModel):
     amount: float
     status: PaymentStatus
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "order_id": 1,
@@ -47,18 +48,20 @@ class PaymentUpdate(BaseModel):
                 },
             ]
         }
+    }
 
 
 class PaymentStatusUpdate(BaseModel):
     status: PaymentStatus
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {"status": "completed"},
                 {"status": "canceled"},
             ]
         }
+    }
 
 
 class PaymentResponse(BaseModel):
@@ -69,12 +72,12 @@ class PaymentResponse(BaseModel):
     qr_code: Optional[str]
     qr_code_expiration: Optional[int]
 
-    class Config:
-        from_attributes = True
-        json_encoders = {
+    model_config = {
+        "from_attributes": True,
+        "json_encoders": {
             ObjectId: str,
-        }
-        json_schema_extra = {
+        },
+        "json_schema_extra": {
             "examples": [
                 {
                     "id": "64c8cbe2f3a5e9a1c4b63e29",
@@ -93,15 +96,16 @@ class PaymentResponse(BaseModel):
                     "qr_code_expiration": 1633520400,
                 },
             ]
-        }
+        },
+    }
 
 
 class WebhookPayload(BaseModel):
     payment_id: str
     status: str
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "payment_id": "64c8cbe2f3a5e9a1c4b63e29",
@@ -113,3 +117,4 @@ class WebhookPayload(BaseModel):
                 },
             ]
         }
+    }

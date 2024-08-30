@@ -15,8 +15,8 @@ COPY . /app
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
-# Make port 8001 available to the world outside this container
-EXPOSE 8001
+# Make port 8004 available to the world outside this container
+EXPOSE 8004
 
 # Command to run the FastAPI application with Uvicorn
 CMD [ "python", "-m", "pytest", "-v", "--cov=adapter", "--cov=domain", "--cov=port", "--cov-report", "xml:/reports/coverage.xml"]

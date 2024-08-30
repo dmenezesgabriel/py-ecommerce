@@ -73,4 +73,3 @@ networks:
 
 volumes:
   postgres_orders:
-  mongo_orders:

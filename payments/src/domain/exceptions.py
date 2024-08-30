@@ -8,3 +8,7 @@ class EntityAlreadyExists(Exception):
 
 class InvalidAction(Exception):
     pass
+
+
+class InvalidEntity(Exception):
+    pass

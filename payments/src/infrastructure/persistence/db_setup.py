@@ -1,18 +1,11 @@
-import os
-
 from pymongo import MongoClient
-
-MONGO_HOST = os.getenv("MONGO_HOST", "mongo")
-MONGO_PORT = int(os.getenv("MONGO_PORT", 27017))
-MONGO_DB = os.getenv("MONGO_DB", "payments")
-MONGO_USER = os.getenv("MONGO_USER", "mongo")
-MONGO_PASS = os.getenv("MONGO_PASS", "mongo")
+from src.config import Config
 
 client = MongoClient(
-    host=MONGO_HOST,
-    port=MONGO_PORT,
-    username=MONGO_USER,
-    password=MONGO_PASS,
+    host=Config.MONGO_HOST,
+    port=Config.MONGO_PORT,
+    username=Config.MONGO_USER,
+    password=Config.MONGO_PASS,
 )
-db = client[MONGO_DB]
+db = client[Config.MONGO_DB]
 payments_collection = db["payments"]
