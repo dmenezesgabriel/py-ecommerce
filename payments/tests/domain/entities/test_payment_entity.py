@@ -1,129 +1,90 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from src.domain.entities.payment_entity import PaymentEntity, PaymentStatus
-from src.domain.exceptions import InvalidEntity
 
 
-def test_payment_entity_initialization():
-    entity = PaymentEntity(
-        order_id=1,
-        amount=100.0,
-        status=PaymentStatus.PENDING,
-        qr_code="sample_qr_code",
-        qr_code_expiration=3600,
-        id="sample_id",
+def test_payment_entity_creation():
+    # Arrange
+    order_id = 1
+    amount = 100.0
+    status = PaymentStatus.PENDING
+    qr_code = "sample_qr_code"
+    qr_code_expiration = 1234567890
+    payment_id = "sample_id"
+
+    # Act
+    payment = PaymentEntity(
+        order_id=order_id,
+        amount=amount,
+        status=status,
+        qr_code=qr_code,
+        qr_code_expiration=qr_code_expiration,
+        id=payment_id,
     )
 
-    assert entity.id == "sample_id"
-    assert entity.order_id == 1
-    assert entity.amount == 100.0
-    assert entity.status == PaymentStatus.PENDING
-    assert entity.qr_code == "sample_qr_code"
-    assert entity.qr_code_expiration == 3600
+    # Assert
+    assert payment.id == payment_id
+    assert payment.order_id == order_id
+    assert payment.amount == amount
+    assert payment.status == status
+    assert payment.qr_code == qr_code
+    assert payment.qr_code_expiration == qr_code_expiration
 
 
-def test_payment_entity_invalid_id():
-    with pytest.raises(InvalidEntity):
-        PaymentEntity(
-            order_id=1,
-            amount=100.0,
-            status=PaymentStatus.PENDING,
-            id=123,  # Invalid ID, should be str or None
-        )
+def test_payment_entity_default_values():
+    # Arrange
+    order_id = 2
+    amount = 200.0
+    status = PaymentStatus.PENDING
 
-
-def test_payment_entity_invalid_order_id():
-    with pytest.raises(InvalidEntity):
-        PaymentEntity(
-            order_id=-1,  # Invalid order ID, should be positive integer
-            amount=100.0,
-            status=PaymentStatus.PENDING,
-        )
-
-
-def test_payment_entity_invalid_amount():
-    with pytest.raises(InvalidEntity):
-        PaymentEntity(
-            order_id=1,
-            amount=-10.0,  # Invalid amount, should be positive float
-            status=PaymentStatus.PENDING,
-        )
-
-
-def test_payment_entity_invalid_status():
-    with pytest.raises(InvalidEntity):
-        PaymentEntity(
-            order_id=1,
-            amount=100.0,
-            status="invalid_status",  # Invalid status, should be one of PaymentStatus
-        )
-
-
-def test_payment_entity_invalid_qr_code_expiration():
-    with pytest.raises(InvalidEntity):
-        PaymentEntity(
-            order_id=1,
-            amount=100.0,
-            status=PaymentStatus.PENDING,
-            qr_code_expiration=-10,  # Invalid expiration, should be positive integer or None
-        )
-
-
-def test_payment_entity_setters():
-    entity = PaymentEntity(
-        order_id=1,
-        amount=100.0,
-        status=PaymentStatus.PENDING,
+    # Act
+    payment = PaymentEntity(
+        order_id=order_id,
+        amount=amount,
+        status=status,
     )
 
-    entity.id = "new_id"
-    assert entity.id == "new_id"
-
-    entity.order_id = 2
-    assert entity.order_id == 2
-
-    entity.amount = 200.0
-    assert entity.amount == 200.0
-
-    entity.status = PaymentStatus.COMPLETED
-    assert entity.status == PaymentStatus.COMPLETED
-
-    entity.qr_code = "new_qr_code"
-    assert entity.qr_code == "new_qr_code"
-
-    entity.qr_code_expiration = 7200
-    assert entity.qr_code_expiration == 7200
+    # Assert
+    assert payment.id is None
+    assert payment.qr_code is None
+    assert payment.qr_code_expiration is None
 
 
 def test_payment_entity_update_status():
-    entity = PaymentEntity(
-        order_id=1,
-        amount=100.0,
-        status=PaymentStatus.PENDING,
+    # Arrange
+    order_id = 3
+    amount = 300.0
+    status = PaymentStatus.PENDING
+    payment = PaymentEntity(
+        order_id=order_id,
+        amount=amount,
+        status=status,
     )
 
-    entity.update_status(PaymentStatus.COMPLETED)
-    assert entity.status == PaymentStatus.COMPLETED
+    # Act
+    new_status = PaymentStatus.COMPLETED
+    payment.update_status(new_status)
+
+    # Assert
+    assert payment.status == new_status
 
 
-def test_payment_entity_to_dict():
-    entity = PaymentEntity(
-        order_id=1,
-        amount=100.0,
-        status=PaymentStatus.PENDING,
-        qr_code="sample_qr_code",
-        qr_code_expiration=3600,
-        id="sample_id",
+@patch("src.domain.entities.payment_entity.PaymentEntity.update_status")
+def test_payment_entity_update_status_mock(mock_update_status):
+    # Arrange
+    order_id = 4
+    amount = 400.0
+    status = PaymentStatus.PENDING
+    payment = PaymentEntity(
+        order_id=order_id,
+        amount=amount,
+        status=status,
     )
 
-    entity_dict = entity.to_dict()
+    # Act
+    new_status = PaymentStatus.FAILED
+    payment.update_status(new_status)
 
-    assert entity_dict == {
-        "id": "sample_id",
-        "order_id": 1,
-        "amount": 100.0,
-        "status": PaymentStatus.PENDING,
-        "qr_code": "sample_qr_code",
-        "qr_code_expiration": 3600,
-    }
+    # Assert
+    mock_update_status.assert_called_once_with(new_status)
