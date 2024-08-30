@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -42,13 +43,17 @@ class DeliverySubscriber(BaseMessagingAdapter):
             status = data.get("status")
 
             if status == "in_transit":
-                self.order_service.update_order_status(
-                    order_id, OrderStatus.SHIPPED
+                asyncio.run(
+                    self.order_service.update_order_status(
+                        order_id, OrderStatus.SHIPPED
+                    )
                 )
                 logger.info(f"Order ID {order_id} marked as shipped.")
             if status == "delivered":
-                self.order_service.update_order_status(
-                    order_id, OrderStatus.FINISHED
+                asyncio.run(
+                    self.order_service.update_order_status(
+                        order_id, OrderStatus.FINISHED
+                    )
                 )
                 logger.info(f"Order ID {order_id} marked as finished.")
         except Exception as e:

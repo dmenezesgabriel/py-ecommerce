@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -40,10 +41,10 @@ class PaymentSubscriber(BaseMessagingAdapter):
             status = data.get("status")
 
             if status == "completed":
-                self.order_service.set_paid_order(order_id)
+                asyncio.run(self.order_service.set_paid_order(order_id))
                 logger.info(f"Order ID {order_id} marked as paid.")
             if status in ["refunded", "canceled"]:
-                self.order_service.cancel_order(order_id)
+                asyncio.run(self.order_service.cancel_order(order_id))
                 logger.info(f"Order ID {order_id} marked as canceled.")
         except Exception as e:
             logger.error(f"Error processing message: {e}")
