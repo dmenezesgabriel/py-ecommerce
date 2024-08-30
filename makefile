@@ -1,3 +1,5 @@
+.PHONY: apply-migrations-%-service apply-inventory-migrations apply-orders-migrations apply-delivery-migrations apply-all-migrations run-% run-infra run-services show-logs-% show-services-logs
+
 apply-migrations-%-service:
 	docker compose run --rm $*_service /bin/bash -c \
 	"alembic -c migrations/alembic/alembic.ini upgrade head"
@@ -17,7 +19,13 @@ apply-all-migrations: apply-inventory-migrations apply-orders-migrations apply-d
 run-%:
 	docker compose up -d $*
 
-run-infra: run-rabbitmq run-postgres run-mongo apply-all-migrations
+wait-for-postgres:
+	until docker compose exec postgres pg_isready -U postgres; do \
+		echo "Waiting for postgres..."; \
+		sleep 2; \
+	done
+
+run-infra: run-rabbitmq run-postgres run-mongo wait-for-postgres apply-all-migrations
 	echo "Running infra"
 
 run-services: run-inventory_service run-orders_service run-payments_service run-delivery_service
