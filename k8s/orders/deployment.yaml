@@ -13,9 +13,10 @@ spec:
       labels:
         app: orders
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: orders
-          image: orders:latest
+          image: dmenezesgabriel/orders:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 8002
@@ -53,6 +54,8 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+              ephemeral-storage: "500Mi"
             requests:
               cpu: "250m"
               memory: "256Mi"
+              ephemeral-storage: "500Mi"

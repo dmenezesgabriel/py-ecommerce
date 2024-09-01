@@ -8,10 +8,11 @@ spec:
     metadata:
       name: inventory-migration
     spec:
+      automountServiceAccountToken: false
       restartPolicy: OnFailure
       containers:
         - name: inventory-migration
-          image: inventory:latest
+          image: dmenezesgabriel/inventory:latest
           imagePullPolicy: Never
           command: ["/bin/bash", "-c"]
           args:

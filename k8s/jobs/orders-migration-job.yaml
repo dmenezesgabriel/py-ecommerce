@@ -8,10 +8,11 @@ spec:
     metadata:
       name: orders-migration
     spec:
+      automountServiceAccountToken: false
       restartPolicy: OnFailure
       containers:
         - name: orders-migration
-          image: orders:latest
+          image: dmenezesgabriel/orders:latest
           imagePullPolicy: Never
           command: ["/bin/bash", "-c"]
           args:

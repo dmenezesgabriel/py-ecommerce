@@ -13,6 +13,7 @@ spec:
       labels:
         app: rabbitmq
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: rabbitmq
           image: rabbitmq:3-management-alpine
