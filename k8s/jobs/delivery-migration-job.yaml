@@ -2,8 +2,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: delivery-migration-job
-  namespace: ecommerce
 spec:
+  ttlSecondsAfterFinished: 100
   template:
     metadata:
       name: delivery-migration
@@ -13,10 +13,15 @@ spec:
       containers:
         - name: delivery-migration
           image: dmenezesgabriel/delivery:latest
-          imagePullPolicy: Never
-          command: ["/bin/bash", "-c"]
-          args:
-            - "alembic -c migrations/alembic/alembic.ini upgrade head"
+          imagePullPolicy: Always
+          command:
+            [
+              "alembic",
+              "-c",
+              "migrations/alembic/alembic.ini",
+              "upgrade",
+              "head",
+            ]
           env:
             - name: DATABASE_HOST
               value: postgres
