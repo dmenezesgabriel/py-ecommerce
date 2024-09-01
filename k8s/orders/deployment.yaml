@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: orders
-  namespace: ecommerce
 spec:
   replicas: 1
   selector:
@@ -17,9 +16,12 @@ spec:
       containers:
         - name: orders
           image: dmenezesgabriel/orders:latest
-          imagePullPolicy: Never
+          command:
+            ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
+          imagePullPolicy: Always
           ports:
             - containerPort: 8002
+              protocol: TCP
           env:
             - name: INVENTORY_SERVICE_BASE_URL
               value: "http://inventory-service:8001/inventory"
@@ -52,10 +54,10 @@ spec:
             failureThreshold: 3
           resources:
             limits:
-              cpu: "500m"
+              cpu: "1"
               memory: "512Mi"
-              ephemeral-storage: "500Mi"
+              ephemeral-storage: "512Mi"
             requests:
-              cpu: "250m"
-              memory: "256Mi"
-              ephemeral-storage: "500Mi"
+              cpu: "0.5"
+              memory: "128Mi"
+              ephemeral-storage: "512Mi"
