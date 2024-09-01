@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-definitions
+  namespace: ecommerce
+data:
+  definitions.json: |
+    {
+      "users": [
+        {
+          "name": "guest",
+          "password_hash": "BMfxN8drrYcIqXZMr+pWTpDT0nMcOagMduLX0bjr4jwud/pN",
+          "hashing_algorithm": "rabbit_password_hashing_sha256",
+          "tags": ["administrator"],
+          "limits": {}
+        }
+      ],
+      "vhosts": [
+        {
+          "name": "/"
+        }
+      ],
+      "permissions": [
+        {
+          "user": "guest",
+          "vhost": "/",
+          "configure": ".*",
+          "write": ".*",
+          "read": ".*"
+        }
+      ],
+      "queues": [
+        {
+          "name": "orders_queue",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "inventory_queue",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "delivery_queue",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "payment_queue",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        }
+      ],
+      "exchanges": [
+        {
+          "name": "orders_exchange",
+          "vhost": "/",
+          "type": "topic",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        },
+        {
+          "name": "inventory_exchange",
+          "vhost": "/",
+          "type": "direct",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        },
+        {
+          "name": "delivery_exchange",
+          "vhost": "/",
+          "type": "topic",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        },
+        {
+          "name": "payment_exchange",
+          "vhost": "/",
+          "type": "topic",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        }
+      ],
+      "bindings": [
+        {
+          "source": "orders_exchange",
+          "vhost": "/",
+          "destination": "orders_queue",
+          "destination_type": "queue",
+          "routing_key": "orders_queue",
+          "arguments": {}
+        },
+        {
+          "source": "inventory_exchange",
+          "vhost": "/",
+          "destination": "inventory_queue",
+          "destination_type": "queue",
+          "routing_key": "inventory_queue",
+          "arguments": {}
+        },
+        {
+          "source": "delivery_exchange",
+          "vhost": "/",
+          "destination": "delivery_queue",
+          "destination_type": "queue",
+          "routing_key": "delivery_queue",
+          "arguments": {}
+        },
+        {
+          "source": "payment_exchange",
+          "vhost": "/",
+          "destination": "payment_queue",
+          "destination_type": "queue",
+          "routing_key": "payment_queue",
+          "arguments": {}
+        }
+      ]
+    }

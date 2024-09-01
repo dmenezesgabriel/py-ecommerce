@@ -6,7 +6,7 @@ x-kong-config: &kong-env
   KONG_PG_PASSWORD: kongpassword
 
 services:
-  inventory_service:
+  inventory:
     hostname: inventory_service
     build:
       context: ./inventory
@@ -34,7 +34,7 @@ services:
       retries: 3
     restart: on-failure
 
-  orders_service:
+  orders:
     hostname: orders_service
     build:
       context: ./orders
@@ -63,7 +63,7 @@ services:
       retries: 3
     restart: on-failure
 
-  payments_service:
+  payments:
     hostname: payments_service
     build:
       context: ./payments
@@ -84,7 +84,7 @@ services:
       retries: 3
     restart: on-failure
 
-  delivery_service:
+  delivery:
     hostname: delivery_service
     build:
       context: ./delivery

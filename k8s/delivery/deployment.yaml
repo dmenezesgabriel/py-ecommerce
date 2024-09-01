@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delivery
+  namespace: ecommerce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: delivery
+  template:
+    metadata:
+      labels:
+        app: delivery
+    spec:
+      containers:
+        - name: delivery
+          image: delivery:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8004
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+            requests:
+              cpu: "250m"
+              memory: "128Mi"
+          env:
+            - name: ORDER_SERVICE_BASE_URL
+              value: "http://orders-service:8002/orders"
+            - name: BROKER_HOST
+              value: rabbitmq
+            - name: DATABASE_HOST
+              value: postgres
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: delivery
+            - name: DATABASE_USER
+              value: delivery_app
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: delivery-app-password
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            periodSeconds: 30
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            periodSeconds: 30
+            failureThreshold: 3

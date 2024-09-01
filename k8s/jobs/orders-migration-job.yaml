@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: orders-migration-job
+  namespace: ecommerce
+spec:
+  template:
+    metadata:
+      name: orders-migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: orders-migration
+          image: orders:latest
+          imagePullPolicy: Never
+          command: ["/bin/bash", "-c"]
+          args:
+            - "alembic -c migrations/alembic/alembic.ini upgrade head"
+          env:
+            - name: DATABASE_HOST
+              value: postgres
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: order
+            - name: DATABASE_USER
+              value: order_app
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: order-app-password
