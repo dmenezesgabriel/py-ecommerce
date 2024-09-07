@@ -8,6 +8,6 @@ spec:
   selector:
     app: delivery
   ports:
-    - port: 3000
-      targetPort: 3000
-      nodePort: 30003
+    - port: 8004
+      targetPort: 8004
+      nodePort: 30004

@@ -8,6 +8,6 @@ spec:
   selector:
     app: inventory
   ports:
-    - port: 3000
-      targetPort: 3000
-      nodePort: 30000
+    - port: 8001
+      targetPort: 8001
+      nodePort: 30001

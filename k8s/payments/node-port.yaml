@@ -8,6 +8,6 @@ spec:
   selector:
     app: payments
   ports:
-    - port: 3000
-      targetPort: 3000
-      nodePort: 30002
+    - port: 8003
+      targetPort: 8003
+      nodePort: 30003
