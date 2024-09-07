@@ -54,6 +54,8 @@ kubectl --context=minikube apply -f postgres/node-port.yaml -n ecommerce
 kubectl port-forward service/postgres --address 0.0.0.0 30432:5432 -n ecommerce
 ```
 
+It should be accessible at localhost:30432
+
 #### Create databases
 
 - **Apply**:
@@ -134,5 +136,27 @@ kubectl --context=minikube apply -f mongo/service.yaml -n ecommerce
 
 ```sh
 kubectl --context=minikube apply -f mongo/node-port.yaml -n ecommerce
-kubectl port-forward service/mongo --address 0.0.0.0 30432:5432 -n ecommerce
+kubectl port-forward service/mongo --address 0.0.0.0 30433:27017 -n ecommerce
 ```
+
+It should be accessible at localhost:30433
+
+### RabbitMq
+
+- **Apply**:
+
+```sh
+kubectl --context=minikube apply -f rabbitmq/rabbitmq-config.yaml -n ecommerce
+kubectl --context=minikube apply -f rabbitmq/rabbitmq-definitions.yaml -n ecommerce
+kubectl --context=minikube apply -f rabbitmq/deployment.yaml -n ecommerce
+kubectl --context=minikube apply -f rabbitmq/service.yaml -n ecommerce
+```
+
+- **Access locally via Node-port**:
+
+```sh
+kubectl --context=minikube apply -f rabbitmq/node-port.yaml -n ecommerce
+kubectl port-forward service/rabbitmq --address 0.0.0.0 30434:15672 -n ecommerce
+```
+
+It should be accessible at localhost:30434
