@@ -115,3 +115,24 @@ kubectl --context=minikube logs job/delivery-migration-job -n ecommerce
 ```sh
 # kubectl --context=minikube delete -f jobs/delivery-migration-job.yaml -n ecommerce
 ```
+
+### Mongo
+
+- **Apply**:
+
+```sh
+# If secrets not already applied:
+# kubectl --context=minikube apply -f shared/secrets/database-secrets.yaml -n ecommerce
+
+kubectl --context=minikube apply -f mongo/pv.yaml -n ecommerce
+kubectl --context=minikube apply -f mongo/pvc.yaml -n ecommerce
+kubectl --context=minikube apply -f mongo/deployment.yaml -n ecommerce
+kubectl --context=minikube apply -f mongo/service.yaml -n ecommerce
+```
+
+- **Access locally via Node-port**:
+
+```sh
+kubectl --context=minikube apply -f mongo/node-port.yaml -n ecommerce
+kubectl port-forward service/mongo --address 0.0.0.0 30432:5432 -n ecommerce
+```
