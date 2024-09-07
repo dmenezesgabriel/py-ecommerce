@@ -4,6 +4,7 @@
 
   // List of extensions which should be recommended for users of this workspace.
   "recommendations": [
+    //  Python
     "ms-python.flake8",
     "ms-python.black-formatter",
     "ms-python.mypy-type-checker",
@@ -11,12 +12,22 @@
     "ms-python.python",
     "ms-python.debugpy",
     "ms-python.vscode-pylance",
+    // General formatters and checkers
     "esbenp.prettier-vscode",
     "shardulm94.trailing-spaces",
     "streetsidesoftware.code-spell-checker-portuguese-brazilian",
     "streetsidesoftware.code-spell-checker",
+    "SonarSource.sonarlint-vscode",
+    // Tests
+    "CucumberOpen.cucumber-official",
+    // Utilitaries
     "hediet.vscode-drawio",
-    "SonarSource.sonarlint-vscode"
+    "ritwickdey.LiveServer",
+    "mohsen1.prettify-json",
+    // Infrastructure
+    "ms-kubernetes-tools.vscode-kubernetes-tools",
+    "hashicorp.terraform",
+    "ms-azuretools.vscode-docker"
   ],
   // List of extensions recommended by VS Code that should not be recommended for users of this workspace.
   "unwantedRecommendations": []

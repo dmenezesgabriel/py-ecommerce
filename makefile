@@ -1,38 +1,66 @@
-.PHONY: apply-migrations-%-service apply-inventory-migrations apply-orders-migrations apply-delivery-migrations apply-all-migrations run-% run-infra run-services show-logs-% show-services-logs
+DOCKER_USERNAME := dmenezesgabriel
+SERVICES := inventory orders payments delivery
+SERVICES_WITH_MIGRATIONS := inventory orders delivery
 
-apply-migrations-%-service:
-	docker compose run --rm $*_service /bin/bash -c \
+.PHONY: apply-migrations-% apply-%-migrations apply-all-migrations run-% run-infra run-services show-logs-% show-services-logs build-% push-% buildall pushall clean
+
+apply-migrations-%:
+	docker compose run --rm $* /bin/bash -c \
 	"alembic -c migrations/alembic/alembic.ini upgrade head"
 
-apply-inventory-migrations: apply-migrations-inventory-service
-	echo "Applying inventory migrations"
+apply-%-migrations: apply-migrations-%
+	@echo "Applying $* migrations"
 
-apply-orders-migrations: apply-migrations-orders-service
-	echo "Applying orders migrations"
-
-apply-delivery-migrations: apply-migrations-delivery-service
-	echo "Applying delivery migrations"
-
-apply-all-migrations: apply-inventory-migrations apply-orders-migrations apply-delivery-migrations
-	echo "Applying all migrations"
+apply-migrations-all: $(addprefix apply-,$(addsuffix -migrations,$(SERVICES_WITH_MIGRATIONS)))
+	@echo "All migrations applied"
 
 run-%:
 	docker compose up -d $*
 
 wait-for-postgres:
-	until docker compose exec postgres pg_isready -U postgres; do \
+	@until docker compose exec postgres pg_isready -U postgres; do \
 		echo "Waiting for postgres..."; \
 		sleep 2; \
 	done
 
-run-infra: run-rabbitmq run-postgres run-mongo wait-for-postgres apply-all-migrations
-	echo "Running infra"
+run-infra: run-rabbitmq run-postgres run-mongo wait-for-postgres apply-migrations-all
+	@echo "Infrastructure is up and running"
 
-run-services: run-inventory_service run-orders_service run-payments_service run-delivery_service
-	echo "Running services"
+run-services: $(addprefix run-,$(SERVICES))
+	@echo "All services are running"
 
 show-logs-%:
-	docker compose logs $*
+	docker compose logs --tail=100 -f $*
 
-show-services-logs: show-logs-inventory_service show-logs-orders_service show-logs-payments_service show-logs-delivery_service
-	echo "Show logs"
+show-services-logs:
+	@for service in $(SERVICES); do \
+		docker compose logs --tail=100 $$service & \
+	done; \
+	wait
+
+build-%:
+	docker build -t $(DOCKER_USERNAME)/$*:latest ./$*
+
+push-%:
+	docker push $(DOCKER_USERNAME)/$*:latest
+
+buildall: $(addprefix build-,$(SERVICES))
+	@echo "All services built"
+
+pushall: $(addprefix push-,$(SERVICES))
+	@echo "All services pushed"
+
+clean:
+	docker compose down -v
+	docker system prune -f
+
+help:
+	@echo "Available targets:"
+	@echo "  apply-all-migrations   - Apply migrations for all services except payments"
+	@echo "  run-infra              - Run infrastructure services"
+	@echo "  run-services           - Run all application services"
+	@echo "  show-services-logs     - Show logs for all services"
+	@echo "  buildall               - Build Docker images for all services"
+	@echo "  pushall                - Push Docker images for all services"
+	@echo "  clean                  - Remove containers and prune Docker system"
+	@echo "  help                   - Show this help message"

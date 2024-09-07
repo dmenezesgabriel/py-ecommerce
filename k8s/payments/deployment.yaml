@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payments
+  template:
+    metadata:
+      labels:
+        app: payments
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: payments
+          image: dmenezesgabriel/payments:latest
+          command:
+            ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8003
+              protocol: TCP
+          env:
+            - name: MONGO_HOST
+              value: mongo
+            - name: MONGO_PORT
+              value: "27017"
+            - name: MONGO_DB
+              value: payments
+            - name: MONGO_USER
+              value: mongo
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            periodSeconds: 30
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+              ephemeral-storage: "512Mi"
+            requests:
+              cpu: "0.5"
+              memory: "128Mi"
+              ephemeral-storage: "512Mi"

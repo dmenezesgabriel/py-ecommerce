@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delivery
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: delivery
+  template:
+    metadata:
+      labels:
+        app: delivery
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: delivery
+          image: dmenezesgabriel/delivery:latest
+          command:
+            ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8004"]
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8004
+              protocol: TCP
+          env:
+            - name: ORDER_SERVICE_BASE_URL
+              value: "http://orders-service:8002/orders"
+            - name: BROKER_HOST
+              value: rabbitmq
+            - name: DATABASE_HOST
+              value: postgres
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: delivery
+            - name: DATABASE_USER
+              value: delivery_app
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: delivery-app-password
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            periodSeconds: 30
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+              ephemeral-storage: "512Mi"
+            requests:
+              cpu: "0.5"
+              memory: "128Mi"
+              ephemeral-storage: "512Mi"

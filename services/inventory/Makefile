@@ -18,7 +18,6 @@ unit-tests:
 allure:
 	docker compose -f docker-compose-test.yaml up -d allure
 
-
 bdd-tests:
 	docker compose -f docker-compose-test.yaml run --rm bdd
 

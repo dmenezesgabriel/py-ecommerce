@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: inventory-migration-job
+spec:
+  ttlSecondsAfterFinished: 100
+  template:
+    metadata:
+      name: inventory-migration
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: OnFailure
+      containers:
+        - name: inventory-migration
+          image: dmenezesgabriel/inventory:latest
+          imagePullPolicy: Always
+          command:
+            [
+              "alembic",
+              "-c",
+              "migrations/alembic/alembic.ini",
+              "upgrade",
+              "head",
+            ]
+          env:
+            - name: DATABASE_HOST
+              value: postgres
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: inventory
+            - name: DATABASE_USER
+              value: inventory_app
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: inventory-app-password
