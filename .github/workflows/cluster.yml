@@ -1,0 +1,87 @@
+name: "Cluster Dispatch"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Cluster action to perform"
+        type: choice
+        options:
+          - kubectl_apply
+          - kubectl_delete
+
+jobs:
+  cluster_apply:
+    name: "kubectl_apply"
+    if: ${{ github.event.inputs.action == 'kubectl_apply' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: .
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Install kubectl
+        run: >
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s
+          https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+
+          chmod +x kubectl
+
+          sudo mv kubectl /usr/local/bin/
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: "${{ secrets.AWS_ACCESS_KEY_ID }}"
+          aws-secret-access-key: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          aws-session-token: "${{ secrets.AWS_SESSION_TOKEN }}"
+          aws-region: "${{ secrets.AWS_REGION }}"
+
+      - name: Connect to EKS Cluster
+        run: |
+          aws eks update-kubeconfig --name cluster-postech-challenge-3  --region ${{ secrets.AWS_REGION }}
+      - name: Apply changes to the cluster
+        run: |
+          kubectl create namespace eks-sample-app & \
+          kubectl apply -f apps/sample/private-lb.yml -n eks-sample-app & \
+          kubectl apply -f apps/sample/public-lb.yml -n eks-sample-app & \
+          kubectl apply -f apps/sample/deployment.yml -n eks-sample-app & \
+          kubectl apply -f apps/sample/auto-scaler.yml -n kube-system
+
+  cluster_destroy:
+    name: "kubectl_delete"
+    if: ${{ github.event.inputs.action == 'kubectl_delete' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: .
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Install kubectl
+        run: >
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s
+          https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+
+          chmod +x kubectl
+
+          sudo mv kubectl /usr/local/bin/
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: "${{ secrets.AWS_ACCESS_KEY_ID }}"
+          aws-secret-access-key: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          aws-session-token: "${{ secrets.AWS_SESSION_TOKEN }}"
+          aws-region: "${{ secrets.AWS_REGION }}"
+
+      - name: Connect to EKS Cluster
+        run: |
+          aws eks update-kubeconfig --name cluster-postech-challenge-3  --region ${{ secrets.AWS_REGION }}
+      - name: Apply changes to the cluster
+        run: |
+          kubectl delete -f apps/sample/private-lb.yml -n eks-sample-app & \
+          kubectl delete -f apps/sample/public-lb.yml -n eks-sample-app & \
+          kubectl delete -f apps/sample/deployment.yml -n eks-sample-app & \
+          kubectl delete -f apps/sample/auto-scaler.yml -n kube-system
