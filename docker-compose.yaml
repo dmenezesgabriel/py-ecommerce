@@ -9,12 +9,12 @@ services:
   inventory:
     hostname: inventory_service
     build:
-      context: ./inventory
+      context: ./services/inventory
       dockerfile: Dockerfile
     ports:
       - "8001:8001"
     volumes:
-      - ./inventory:/app
+      - ./services/inventory:/app
     networks:
       - ecommerce_network
     command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
@@ -37,12 +37,12 @@ services:
   orders:
     hostname: orders_service
     build:
-      context: ./orders
+      context: ./services/orders
       dockerfile: Dockerfile.orders
     ports:
       - "8002:8002"
     volumes:
-      - ./orders:/app
+      - ./services/orders:/app
     networks:
       - ecommerce_network
     command: uvicorn main:app --host 0.0.0.0 --port 8002 --reload
@@ -66,12 +66,12 @@ services:
   payments:
     hostname: payments_service
     build:
-      context: ./payments
+      context: ./services/payments
       dockerfile: Dockerfile
     ports:
       - "8003:8003"
     volumes:
-      - ./payments:/app
+      - ./services/payments:/app
     depends_on:
       - mongo
     networks:
@@ -87,12 +87,12 @@ services:
   delivery:
     hostname: delivery_service
     build:
-      context: ./delivery
+      context: ./services/delivery
       dockerfile: Dockerfile
     ports:
       - "8004:8004"
     volumes:
-      - ./delivery:/app
+      - ./services/delivery:/app
     networks:
       - ecommerce_network
     command: uvicorn main:app --host 0.0.0.0 --port 8004 --reload
