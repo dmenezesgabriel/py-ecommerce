@@ -26,7 +26,7 @@ make run-services
 make show-services-logs
 ```
 
-### DockerHUb
+### Docker HUB
 
 - **Login**:
 
