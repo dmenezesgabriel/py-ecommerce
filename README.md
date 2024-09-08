@@ -1,6 +1,15 @@
 # Py Order System
 
-## Run locally
+This is an micro service based order system that counts with three services:
+
+- Inventory
+- Orders
+- Payments
+- Delivery
+
+![diagram](docs/assets//architecture.drawio.svg)
+
+## Run locally with Docker
 
 ```sh
 make run-infra
@@ -33,3 +42,7 @@ make buildall
 ```sh
 make pushall
 ```
+
+## Run locally with Kubernetes
+
+see `/k8s` for instructions [README](./k8s/README.md)
