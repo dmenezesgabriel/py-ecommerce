@@ -1,11 +1,14 @@
 # Py Order System
 
-This is an micro service based order system that counts with three services:
+This is an ordering system system backend, with the aim of mitigating confusion among waiters and delays in preparing deliveries and orders, developed for FIAP's postgraduate software architecture course.
 
-- Inventory
-- Orders
-- Payments
-- Delivery
+## Architecture
+
+It was developed based on four microservices, Inventory, Orders, Payments and Delivery.
+
+### Saga Pattern
+
+To better maintain consistence of the information that pass through services it was chosen the **Choreography**-based saga pattern in which each squad has more autonomy and there is no single point of failure. Since this system composition yet present low complexity the current pattern was the best fit, but in the feature as the complexity grows we may reconsider to an Orchestrated-based one.
 
 ![diagram](docs/assets//architecture.drawio.svg)
 
