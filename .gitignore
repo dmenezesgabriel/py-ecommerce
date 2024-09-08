@@ -164,3 +164,6 @@ cython_debug/
 *.db
 
 allure-results/
+*.celerybeat
+*.cer
+*.key

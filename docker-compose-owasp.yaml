@@ -1,0 +1,69 @@
+include:
+  - docker-compose.yaml
+
+services:
+  # https://nvd.nist.gov/developers/request-an-api-key
+  dependency-check:
+    image: owasp/dependency-check:latest # Use the latest version
+    container_name: owasp_dependency_check
+    environment:
+      - USER=${USER}
+    user: "${UID}:${GID}" # Match the user's UID and GID to avoid permission issues
+    volumes:
+      - .:/src:z # Mount the current directory
+      - $HOME/OWASP-Dependency-Check/data:/usr/share/dependency-check/data:z # Persistent data directory
+      - ./odc-reports:/report:z # Report output directory
+    command: >
+      --scan /src
+      --format "ALL"
+      --project "dependency-check scan: $(pwd)"
+      --out /report
+      --nvdApiKey "$(NVD_API_KEY)"
+
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    container_name: owasp_zap
+    user: zap # Run as the 'zap' user
+    ports:
+      # http://localhost:8989/zap/
+      - "8989:8080" # WebSwing UI
+      - "8990:8090" # ZAP API
+    volumes:
+      - .:/zap/wrk/:rw # Mount the current directory to /zap/wrk/
+    command: zap-webswing.sh # Command to run ZAP with WebSwing
+    networks:
+      - ecommerce_network
+
+  dtrack-apiserver:
+    image: dependencytrack/apiserver
+    deploy:
+      resources:
+        limits:
+          memory: 6000m
+        reservations:
+          memory: 6000m
+      restart_policy:
+        condition: on-failure
+    ports:
+      - "5121:8080"
+    volumes:
+      - "ecommerce-dependency-track:/data"
+    restart: unless-stopped
+    networks:
+      - ecommerce_network
+
+  # admin/admin
+  dtrack-frontend:
+    image: dependencytrack/frontend
+    depends_on:
+      - dtrack-apiserver
+    environment:
+      - API_BASE_URL=http://localhost:5121
+    ports:
+      - "5122:8080"
+    restart: unless-stopped
+    networks:
+      - ecommerce_network
+
+volumes:
+  ecommerce-dependency-track:
