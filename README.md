@@ -26,6 +26,10 @@ make run-services
 make show-services-logs
 ```
 
+### OWASP ZAP
+
+Reports generated on folder `zap-reports`.
+
 ### Docker HUB
 
 - **Login**:
