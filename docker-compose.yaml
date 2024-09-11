@@ -162,66 +162,66 @@ services:
     networks:
       - ecommerce_network
 
-  keycloak:
-    hostname: keycloak
-    image: quay.io/keycloak/keycloak:21.1.1
-    environment:
-      - KEYCLOAK_ADMIN=admin
-      - KEYCLOAK_ADMIN_PASSWORD=admin
-      # - KC_DB=postgres
-      # - KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak_db
-      # - KC_DB_USERNAME=keycloak
-      # - KC_DB_PASSWORD=keycloakpassword
-    ports:
-      - "8070:8070"
-    command:
-      - "start-dev"
-      - "--http-port=8070"
-      - "--import-realm"
-    networks:
-      - ecommerce_network
-    volumes:
-      - ./conf/keycloak/realm.json:/opt/keycloak/data/import/realm.json
-    # depends_on:
-    #   - postgres
+  # keycloak:
+  #   hostname: keycloak
+  #   image: quay.io/keycloak/keycloak:21.1.1
+  #   environment:
+  #     - KEYCLOAK_ADMIN=admin
+  #     - KEYCLOAK_ADMIN_PASSWORD=admin
+  #     # - KC_DB=postgres
+  #     # - KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak_db
+  #     # - KC_DB_USERNAME=keycloak
+  #     # - KC_DB_PASSWORD=keycloakpassword
+  #   ports:
+  #     - "8070:8070"
+  #   command:
+  #     - "start-dev"
+  #     - "--http-port=8070"
+  #     - "--import-realm"
+  #   networks:
+  #     - ecommerce_network
+  #   volumes:
+  #     - ./conf/keycloak/realm.json:/opt/keycloak/data/import/realm.json
+  #   # depends_on:
+  #   #   - postgres
 
-  kong-migrations:
-    image: kong/kong-gateway:3.7.1.2
-    command: kong migrations bootstrap
-    environment:
-      <<: *kong-env
-      KONG_CASSANDRA_CONTACT_POINTS: kong-database
-    networks:
-      - ecommerce_network
-    depends_on:
-      - postgres
+  # kong-migrations:
+  #   image: kong/kong-gateway:3.7.1.2
+  #   command: kong migrations bootstrap
+  #   environment:
+  #     <<: *kong-env
+  #     KONG_CASSANDRA_CONTACT_POINTS: kong-database
+  #   networks:
+  #     - ecommerce_network
+  #   depends_on:
+  #     - postgres
 
-  kong:
-    hostname: kong
-    image: kong/kong-gateway:3.7.1.2
-    environment:
-      <<: *kong-env
-      KONG_DATABASE: "off" # Database must be off to use KONG_DECLARATIVE_CONFIG
-      KONG_PROXY_ACCESS_LOG: /dev/stdout
-      KONG_ADMIN_ACCESS_LOG: /dev/stdout
-      KONG_PROXY_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: 0.0.0.0:8101
-      KONG_PROXY_LISTEN: 0.0.0.0:8100
-      KONG_ADMIN_GUI_URL: http://localhost:8102
-      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
-    ports:
-      - "8100:8100/tcp"
-      - "8543:8543/tcp"
-      - "8101:8101/tcp"
-      - "8544:8544/tcp"
-      - "8102:8102/tcp"
-    volumes:
-      - ./conf/kong/kong.yml:/kong/declarative/kong.yml
-    networks:
-      - ecommerce_network
-    # depends_on:
-    #   - kong-migrations
+  # kong:
+  #   hostname: kong
+  #   image: kong/kong-gateway:3.7.1.2
+  #   environment:
+  #     <<: *kong-env
+  #     KONG_DATABASE: "off" # Database must be off to use KONG_DECLARATIVE_CONFIG
+  #     KONG_PROXY_ACCESS_LOG: /dev/stdout
+  #     KONG_ADMIN_ACCESS_LOG: /dev/stdout
+  #     KONG_PROXY_ERROR_LOG: /dev/stderr
+  #     KONG_ADMIN_ERROR_LOG: /dev/stderr
+  #     KONG_ADMIN_LISTEN: 0.0.0.0:8101
+  #     KONG_PROXY_LISTEN: 0.0.0.0:8100
+  #     KONG_ADMIN_GUI_URL: http://localhost:8102
+  #     KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+  #   ports:
+  #     - "8100:8100/tcp"
+  #     - "8543:8543/tcp"
+  #     - "8101:8101/tcp"
+  #     - "8544:8544/tcp"
+  #     - "8102:8102/tcp"
+  #   volumes:
+  #     - ./conf/kong/kong.yml:/kong/declarative/kong.yml
+  #   networks:
+  #     - ecommerce_network
+  #   # depends_on:
+  #   #   - kong-migrations
 
 networks:
   ecommerce_network:
